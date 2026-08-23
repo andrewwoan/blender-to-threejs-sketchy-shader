@@ -1,0 +1,168 @@
+# Hatch & Outline Lab
+
+Two ways to make a three.js scene look hand-drawn — crosshatched shading, ink
+outlines, and a stop-motion "boil" — running side by side on the same objects,
+the same lights, and the same paper grade, so the only thing that differs is the
+technique.
+
+Everything is [three.js](https://threejs.org) **WebGPU + TSL**. No binary assets:
+the crosshatch sheet and the paper are generated on a canvas at startup.
+
+```bash
+npm install
+npm run dev
+```
+
+Needs a WebGPU-capable browser (Chrome/Edge 113+, Firefox 141+, Safari 26+).
+
+Drag either half to orbit and scroll to zoom — the two cameras are locked
+together, so whichever pane you grab, both move. Orbiting is the fastest way to
+see where the two methods actually diverge: watch method A's outline hold rock
+steady while method B's swims a little, and watch B keep drawing the torus knot's
+interior contours from angles where A shows only its silhouette.
+
+---
+
+## The two methods
+
+|                     | **A — Inverted Hull**                              | **B — Screen-Space Line Art**                                  |
+| ------------------- | -------------------------------------------------- | -------------------------------------------------------------- |
+| **Hatching**        | Sheet multiplied in through a shadow mask           | Sheet read as four tone stops: white → R → G → B                 |
+| **Hatch boil**      | Cycle which channel is sampled (R → G → B)          | Walk the sampling UV one golden angle per step                   |
+| **Outline**         | Backface-expanded duplicate geometry                | Post-process edge detection over a depth/normal/id pre-pass      |
+| **Outline boil**    | Per-vertex hash jitter on a stepped clock           | Screen-space wobble + jerk + running-dry noise on a stepped clock|
+| **Interior contours** | No — a hull is only ever a silhouette             | Yes                                                              |
+| **Line width**      | Object-space, so it varies with distance and scale  | Uniform in pixels, everywhere                                    |
+| **Cost**            | +1 draw call per mesh, no post-processing           | +1 full scene pass, 3 buffers                                    |
+| **Steadiness**      | World-space — rock steady under camera motion       | Screen-space — swims slightly as the camera moves                |
+
+Neither is "the right one". A has almost no infrastructure and composites with
+anything; B inks a whole scene with no per-mesh setup and can modulate the line
+per pixel. Look at the torus knot in both panes: A draws only its outside, B
+draws where the tube passes in front of itself.
+
+### The one idea both boils share
+
+```js
+const step = time.mul(speed).floor();
+```
+
+The clock runs continuously; `floor()` makes the drawing change only on integer
+ticks and **hold** in between. That hold is what separates a hand-drawn boil from
+a smooth animated wobble, and every noise in this repo is seeded on it.
+
+---
+
+## Layout
+
+```
+src/
+  main.js                          two panes, one rAF
+  shared/
+    Pane.js                        canvas + renderer + camera + loop
+    linkedOrbit.js                 one OrbitControls per pane, mirrored to each other
+    dummyScene.js                  the cube / knot / sphere / ground, and the lights
+    paperGrade.js                  paper multiply, contrast, vignette (shared by both)
+  textures/
+    crosshatch.js                  procedural 3-channel tone sheet
+    paper.js                       procedural paper stock
+  methods/
+    invertedHull/                  METHOD A
+      hatchedMaterial.js             shadow-masked multiply + channel-permute boil
+      outline.js                     the hull, normal smoothing, vertex jitter
+      index.js                       wiring + GUI
+    screenSpace/                   METHOD B
+      hatchedMaterial.js             four tone stops + golden-angle boil
+      outlinePipeline.js             MRT pre-pass + edge detection + hand noise
+      index.js                       wiring + GUI
+```
+
+Each method folder is self-contained — copy one out and it works on its own.
+
+---
+
+## The crosshatch sheet
+
+Both methods read the same contract from the texture, and it is the thing to get
+right if you swap in your own:
+
+- **R = lightest** (sparse strokes), **G = middle**, **B = darkest** (dense).
+- Sample it with `NoColorSpace`. It is three independent stroke densities, not a
+  colour; an sRGB decode bends the tone ramp.
+- **Never** compress it with a format that shares chroma across channels — no
+  lossy WebP/JPEG, no ETC1S. They all assume the channels are a colour and will
+  darken one while brightening another. Lossless PNG/WebP, or three
+  single-channel textures, are the safe options.
+
+`src/textures/crosshatch.js` generates one at startup (~20k canvas strokes, well
+under a second) with wrap-around drawing so it tiles seamlessly, and a fixed PRNG
+seed so everyone sees the same sheet.
+
+Method A additionally normalises the three channels against each other
+(`channelBalance*` / `channelContrast*`). Those numbers are a property of the
+sheet, not of the technique: if all three channels do not read at the same
+average tone, the channel permute becomes a brightness **flicker** instead of a
+redraw. Retune them whenever you change the texture.
+
+---
+
+## Gotchas worth knowing
+
+**Inverted hulls need smoothed normals.** A cube out of any DCC has 24 vertices,
+not 8 — each corner exists once per face, with that face's normal. Inflate along
+those and the copies fly apart, splitting the hull open at every edge. Average
+the normals of co-located vertices first, on a clone, so the visible mesh keeps
+its hard shading. `Outline.smoothNormals` does this.
+
+**`.sample()` returns a vec4, and `dot()` on a vec4 includes alpha.** In the edge
+pass, `colorToDirection(normalTex.sample(uv))` compares four components, and
+alpha is 1 across every pixel the pre-pass drew — so `1 - dot` collapses to
+`-cos(angle)`: negative everywhere, largest on flat surfaces, and it *subtracts*
+from the other edge terms. The symptom is a crease slider that appears to do
+nothing, or that erases silhouettes when you turn it up. Take `.rgb` and
+normalize.
+
+**Depth alone cannot separate two surfaces in nearly the same plane.** A cutout
+against the wall behind it, a box sitting flat on the floor — the depth gap is
+too small to threshold. The object-id channel (a hash of `modelPosition`) is what
+draws those. Note the scale-and-bias before hashing: TSL's `hash()` starts with
+`toUint()`, which *truncates*, so raw metres would collapse a small scene onto one
+id and negative seeds are undefined.
+
+**Mirror the camera by position + target, not by rotation.** OrbitControls
+rebuilds its spherical state from `position - target` at the top of every
+`update()` and ends with `lookAt(target)`, so those two vectors are the whole
+state — copy them and it works the orientation out itself. Copying the quaternion
+as well just adds a second source of truth to drift. `linkedOrbit.js` also needs
+a re-entrancy latch, since writing to a mirror makes it emit `change` and write
+straight back.
+
+**Ink that fades should also thin.** In method B one noise field drives both the
+opacity and the sampling distance, so faint segments of the line are narrow too.
+Varying only the opacity reads as a dissolve, not as a pen running dry.
+
+**The hatch density follows the UV unwrap.** Both methods sample through the
+mesh's own UVs, so a 1-unit cube and a 40-unit ground plane unwrapped to the same
+0..1 get wildly different stroke sizes. There is no shader setting for it — fix
+it in the geometry or in Blender. `dummyScene.js` scales the ground's UVs for
+exactly this reason.
+
+---
+
+## Extras in the code but off by default
+
+**Ink-bleed reveal** (method A, `fluidReveal`). Colour floods into a grayscale
+surface around a moving point in object-local space, behind an edge that is
+displaced by noise stepped on the boil clock — so the patch *jitters* like
+boiling ink rather than flowing like a liquid. Toggle it in the GUI under
+"A — Ink-bleed reveal (sphere)".
+
+**Debug views** (method B). The outline folder can render the raw edge mask, the
+view-normal buffer, or the object-id buffer instead of the composite. Which stage
+comes out empty tells you where a missing line went.
+
+---
+
+## License
+
+MIT.

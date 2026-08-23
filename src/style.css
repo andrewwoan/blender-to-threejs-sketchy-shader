@@ -1,0 +1,121 @@
+:root {
+  --ink: #1a1410;
+  --paper: #f4f1ea;
+  color-scheme: light;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+.split {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+.pane {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The seam between the two methods. */
+.pane + .pane {
+  border-left: 1px solid rgba(26, 20, 16, 0.35);
+}
+
+.pane__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.pane__canvas:active {
+  cursor: grabbing;
+}
+
+.pane__label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 1rem 1.15rem;
+  pointer-events: none;
+  max-width: 30rem;
+}
+
+.pane__label h1 {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.pane__label p {
+  margin-top: 0.4rem;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  opacity: 0.62;
+}
+
+/* Sits over the seam between the two panes, out of the GUI's way. */
+.hint {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: 0.9rem 1.15rem;
+  text-align: center;
+  pointer-events: none;
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  opacity: 0.5;
+}
+
+.unsupported {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 0.75rem;
+  padding: 2rem;
+  text-align: center;
+  background: var(--paper);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.unsupported[hidden] {
+  display: none;
+}
+
+/* Stack the comparison once side-by-side would leave each pane too narrow to
+   frame the scene — at 8:5 each half is exactly 4:5. */
+@media (max-aspect-ratio: 8/5) {
+  .split {
+    flex-direction: column;
+  }
+
+  .pane + .pane {
+    border-left: 0;
+    border-top: 1px solid rgba(26, 20, 16, 0.35);
+  }
+}
+
+.lil-gui {
+  --width: 300px;
+  font-family: ui-monospace, Menlo, Consolas, monospace !important;
+}

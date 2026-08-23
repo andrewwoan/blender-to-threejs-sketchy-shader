@@ -1,0 +1,155 @@
+import {
+  createDummyScene,
+  createLighting,
+  syncLightDirection,
+} from "../../shared/dummyScene.js";
+import { createPaperGrade } from "../../shared/paperGrade.js";
+import { createHatchedMaterial, hatchUniforms } from "./hatchedMaterial.js";
+import { createOutlinePipeline } from "./outlinePipeline.js";
+
+/**
+ * Pane B. Same dummy objects, same lights, same paper grade as pane A - the only
+ * difference is the material and the fact that the outline is a post-process
+ * rather than geometry.
+ *
+ * Note what is NOT here: no per-mesh setup for the outline at all. Every object
+ * in the scene is inked simply by being in it, which is the practical reason to
+ * reach for this method on a scene with a lot of geometry in it.
+ */
+export function buildScreenSpacePane({ pane, camera, gui }) {
+  const world = createDummyScene({
+    makeMaterial: (opts = {}) => createHatchedMaterial(opts),
+  });
+  const lighting = createLighting(world.scene);
+  syncLightDirection(lighting.key, hatchUniforms.lightDirectionWorld);
+
+  const grade = createPaperGrade();
+
+  const outline = createOutlinePipeline({
+    scene: world.scene,
+    camera,
+    sizes: { width: pane.width, height: pane.height },
+    grade,
+  });
+
+  const state = { debugView: 0 };
+
+  setupHatchGUI(gui);
+  setupOutlineGUI(gui, outline, state, pane);
+
+  return {
+    scene: world.scene,
+    output: outline.output,
+    resize: (width, height) => {
+      grade.setAspect(width, height);
+      outline.setResolution(width, height);
+    },
+    update: (delta) => world.update(delta),
+  };
+}
+
+function setupHatchGUI(gui) {
+  const folder = gui.addFolder("B - Hatching (tone stops)");
+
+  const params = {
+    hatchScale: hatchUniforms.hatchScale.value,
+    boilSpeed: hatchUniforms.boilSpeed.value,
+    boilFrames: hatchUniforms.boilFrames.value,
+    boilAmount: hatchUniforms.boilAmount.value,
+    boilRotate: hatchUniforms.boilRotate.value,
+  };
+
+  const bind = (key, uniformNode, min, max, step, label) =>
+    folder
+      .add(params, key, min, max, step)
+      .name(label)
+      .onChange((v) => {
+        uniformNode.value = v;
+      });
+
+  bind("hatchScale", hatchUniforms.hatchScale, 0.5, 24, 0.1, "uv tiling");
+  bind("boilSpeed", hatchUniforms.boilSpeed, 0, 24, 0.5, "boil (steps/sec)");
+  bind("boilFrames", hatchUniforms.boilFrames, 0, 24, 1, "pose cycle (0 = endless)");
+  bind("boilAmount", hatchUniforms.boilAmount, 0, 1, 0.005, "boil uv hop");
+  bind("boilRotate", hatchUniforms.boilRotate, 0, 0.5, 0.005, "boil twist");
+
+  folder.close();
+  return folder;
+}
+
+function setupOutlineGUI(gui, outline, state, pane) {
+  const u = outline.uniforms;
+  const folder = gui.addFolder("B - Outline (screen-space edges)");
+
+  const params = {
+    amount: u.outlineAmount.value,
+    color: "#1a1410",
+    thickness: u.thickness.value,
+    normalEdges: u.normalEdgeStrength.value,
+    depthEdges: u.depthEdgeStrength.value,
+    silhouette: u.silhouetteStrength.value,
+    threshold: u.edgeThreshold.value,
+    softness: u.edgeSoftness.value,
+    wobble: u.wobble.value,
+    wobbleScale: u.wobbleScale.value,
+    boilSpeed: u.boilSpeed.value,
+    opacityVariation: u.opacityVariation.value,
+    taper: u.taper.value,
+    jerkAmount: u.jerkAmount.value,
+    jerkThreshold: u.jerkThreshold.value,
+  };
+
+  const bind = (key, uniformNode, min, max, step, label) =>
+    folder
+      .add(params, key, min, max, step)
+      .name(label)
+      .onChange((v) => {
+        uniformNode.value = v;
+      });
+
+  bind("amount", u.outlineAmount, 0, 1, 0.01, "ink amount");
+  folder.addColor(params, "color").name("ink colour").onChange((v) => {
+    u.outlineColor.value.set(v);
+  });
+  bind("thickness", u.thickness, 0, 20, 0.5, "thickness (px)");
+  bind("normalEdges", u.normalEdgeStrength, 0, 3, 0.01, "crease edges");
+  bind("depthEdges", u.depthEdgeStrength, 0, 3, 0.01, "depth edges");
+  bind("silhouette", u.silhouetteStrength, 0, 3, 0.01, "object-id edges");
+  bind("threshold", u.edgeThreshold, 0, 2, 0.01, "edge threshold");
+  bind("softness", u.edgeSoftness, 0, 2, 0.01, "edge softness");
+
+  const hand = folder.addFolder("hand");
+  const bindHand = (key, uniformNode, min, max, step, label) =>
+    hand
+      .add(params, key, min, max, step)
+      .name(label)
+      .onChange((v) => {
+        uniformNode.value = v;
+      });
+
+  bindHand("boilSpeed", u.boilSpeed, 0, 24, 0.5, "boil (steps/sec)");
+  bindHand("wobble", u.wobble, 0, 12, 0.1, "wobble (px)");
+  bindHand("wobbleScale", u.wobbleScale, 0.5, 30, 0.1, "wobble frequency");
+  bindHand("jerkAmount", u.jerkAmount, 0, 30, 0.5, "jerk (px)");
+  bindHand("jerkThreshold", u.jerkThreshold, 0, 1, 0.01, "jerk rarity");
+  bindHand("taper", u.taper, 0, 1, 0.01, "taper");
+  bindHand("opacityVariation", u.opacityVariation, 0, 1, 0.01, "running dry");
+
+  // Swapping the pipeline's output node recompiles it, which is why this is a
+  // debug control and not something to drive per frame.
+  folder
+    .add(state, "debugView", {
+      composite: 0,
+      "edge mask": 1,
+      "view normals": 2,
+      "object ids": 3,
+    })
+    .name("debug view")
+    .onChange((v) => {
+      pane.pipeline.outputNode = outline.debugViews[Number(v)];
+      pane.pipeline.needsUpdate = true;
+    });
+
+  folder.close();
+  return folder;
+}

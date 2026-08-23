@@ -1,0 +1,20 @@
+{
+  "name": "hatch-outline-lab",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Two hand-drawn (crosshatch + ink outline + boil) rendering methods for three.js WebGPU/TSL, side by side.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "lil-gui": "^0.21.0",
+    "vite": "^8.0.1"
+  },
+  "dependencies": {
+    "three": "^0.183.2"
+  }
+}
