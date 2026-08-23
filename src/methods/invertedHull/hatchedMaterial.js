@@ -17,6 +17,7 @@ import {
   length,
   positionLocal,
   mx_noise_float,
+  Fn,
   color as tslColor,
 } from "three/tsl";
 import { getCrosshatchTexture } from "../../textures/crosshatch.js";
@@ -58,6 +59,14 @@ export const hatchUniforms = {
   shadowSoftness: uniform(0.3),
   // Channel swaps per second. This is the boil.
   permuteSpeed: uniform(2.0),
+  // How much of the CAST shadow is drawn rather than dimmed. 0 reproduces the
+  // usual flat darkened patch; 1 replaces it entirely with hatch strokes.
+  shadowHatch: uniform(0.85),
+  // How far the drawn shadow is pulled down. The sheet averages well above zero,
+  // so without this the hatched shadow lands much LIGHTER than the flat one it
+  // replaced and the objects stop sitting on the ground. Tuned so the two read
+  // at about the same weight - flip `shadowHatch` between 0 and 1 to check.
+  shadowDepth: uniform(0.72),
   // Per-channel normalisation. These numbers are a property of YOUR sheet, not
   // of the technique - retune them if you swap the texture. The goal is that all
   // three channels read at the same average tone, so the permute is a redraw and
@@ -170,6 +179,36 @@ export function createHatchedMaterial({
   const hatchEffect = hatchDarkness
     .mul(shadowMask)
     .mul(hatchUniforms.hatchStrength);
+
+  // --- The CAST shadow, drawn rather than dimmed ---
+  //
+  // Everything above shades the surface by its own angle to the light, which is
+  // why a flat floor never hatches: its normal does not change just because
+  // something is standing on it. The shadow arrives separately, as a light
+  // attenuation three multiplies in AFTER colorNode, so by default it can only
+  // darken the finished pixel uniformly - a flat grey patch laid over a drawing.
+  //
+  // An illustrator does not do that. A cast shadow is drawn, with the same
+  // strokes as everything else, and `material.receivedShadowNode` is the hook
+  // that lets us say so: it hands us the shadow term (0 = fully shadowed,
+  // 1 = lit) and takes a replacement.
+  //
+  // So in shadow we return the hatch sheet itself instead of a constant. The
+  // strokes then ARE the shadow - dark on a stroke, paper between them - and
+  // because it is the same `hatchValue` node the surface uses, it boils in
+  // lockstep and lands on the receiving surface's own UVs, which is where a
+  // drawn shadow's strokes belong.
+  //
+  // `shadowDepth` pulls the whole thing down so the drawn shadow still reads as
+  // darker than lit paper; `shadowHatch` crossfades back to the flat patch, so
+  // the slider shows you exactly what this is doing.
+  const drawnShadow = hatchValue.mul(float(1.0).sub(hatchUniforms.shadowDepth));
+  const flatShadow = float(0.0);
+  const inShadow = mix(flatShadow, drawnShadow, hatchUniforms.shadowHatch);
+
+  material.receivedShadowNode = Fn(([shadow]) =>
+    mix(inShadow, float(1.0), shadow),
+  );
 
   // --- Albedo, in the right colour space ---
   // tslColor() does the sRGB -> linear conversion for hex numbers and

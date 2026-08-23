@@ -57,6 +57,9 @@ function setupHatchGUI(gui) {
     boilFrames: hatchUniforms.boilFrames.value,
     boilAmount: hatchUniforms.boilAmount.value,
     boilRotate: hatchUniforms.boilRotate.value,
+    shadowHatch: hatchUniforms.shadowHatch.value,
+    shadowTone: hatchUniforms.shadowTone.value,
+    shadowDepth: hatchUniforms.shadowDepth.value,
   };
 
   const bind = (key, uniformNode, min, max, step, label) =>
@@ -72,6 +75,9 @@ function setupHatchGUI(gui) {
   bind("boilFrames", hatchUniforms.boilFrames, 0, 24, 1, "pose cycle (0 = endless)");
   bind("boilAmount", hatchUniforms.boilAmount, 0, 1, 0.005, "boil uv hop");
   bind("boilRotate", hatchUniforms.boilRotate, 0, 0.5, 0.005, "boil twist");
+  bind("shadowHatch", hatchUniforms.shadowHatch, 0, 1, 0.01, "cast shadow: drawn");
+  bind("shadowTone", hatchUniforms.shadowTone, 0, 1, 0.01, "cast shadow: stop (G-B)");
+  bind("shadowDepth", hatchUniforms.shadowDepth, 0, 1, 0.01, "cast shadow: depth");
 
   folder.close();
   return folder;

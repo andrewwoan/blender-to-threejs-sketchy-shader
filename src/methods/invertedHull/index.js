@@ -90,6 +90,8 @@ function setupHatchGUI(gui) {
     shadowThreshold: hatchUniforms.shadowThreshold.value,
     shadowSoftness: hatchUniforms.shadowSoftness.value,
     permuteSpeed: hatchUniforms.permuteSpeed.value,
+    shadowHatch: hatchUniforms.shadowHatch.value,
+    shadowDepth: hatchUniforms.shadowDepth.value,
     balanceR: hatchUniforms.channelBalanceR.value,
     balanceB: hatchUniforms.channelBalanceB.value,
     contrastR: hatchUniforms.channelContrastR.value,
@@ -108,6 +110,8 @@ function setupHatchGUI(gui) {
   bind("shadowThreshold", hatchUniforms.shadowThreshold, 0, 1, 0.01, "shadow start");
   bind("shadowSoftness", hatchUniforms.shadowSoftness, 0, 0.5, 0.005, "shadow softness");
   bind("permuteSpeed", hatchUniforms.permuteSpeed, 0, 24, 0.5, "boil (swaps/sec)");
+  bind("shadowHatch", hatchUniforms.shadowHatch, 0, 1, 0.01, "cast shadow: drawn");
+  bind("shadowDepth", hatchUniforms.shadowDepth, 0, 1, 0.01, "cast shadow: depth");
   bind("balanceR", hatchUniforms.channelBalanceR, 0, 3, 0.01, "R balance");
   bind("balanceB", hatchUniforms.channelBalanceB, 0, 3, 0.01, "B balance");
   bind("contrastR", hatchUniforms.channelContrastR, 0, 3, 0.01, "R contrast");

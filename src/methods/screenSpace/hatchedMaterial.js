@@ -15,6 +15,7 @@ import {
   normalView,
   normalize,
   mix,
+  Fn,
   color as tslColor,
 } from "three/tsl";
 import { getCrosshatchTexture } from "../../textures/crosshatch.js";
@@ -60,6 +61,16 @@ export const hatchUniforms = {
   boilFrames: uniform(0.0), // length of the pose cycle; 0 = endless (never repeats)
   boilAmount: uniform(0.15), // UV offset magnitude per step
   boilRotate: uniform(0.03), // radians of per-pose twist (0 = pure sliding)
+  // How much of the CAST shadow is drawn rather than dimmed. 0 is the usual flat
+  // darkened patch; 1 replaces it entirely with strokes.
+  shadowHatch: uniform(0.9),
+  // Where in the tone ramp a shadow sits: 0 = the middle stop (G), 1 = the
+  // densest (B). Shadow is "further along the ramp" in this method...
+  shadowTone: uniform(1.0),
+  // ...except the ramp RUNS OUT at B. There is no stop denser than the densest
+  // one, so a cast shadow has to be the last stop plus a multiply - otherwise it
+  // lands lighter than the flat shadow it replaced and the objects float.
+  shadowDepth: uniform(0.6),
   // World-space direction pointing FROM the surface TO the light.
   lightDirectionWorld: uniform(vec3(0.5, 1.0, 0.3)),
 };
@@ -145,6 +156,32 @@ export function createHatchedMaterial({
   const stopR = mix(float(1.0), tex.r, t.clamp(0, 1));
   const stopG = mix(stopR, tex.g, t.sub(1.0).clamp(0, 1));
   const hatch = mix(stopG, tex.b, t.sub(2.0).clamp(0, 1));
+
+  // --- The CAST shadow, drawn rather than dimmed ---
+  //
+  // The ramp above is driven by the surface's own angle to the light, so a flat
+  // floor sits at the same tone stop everywhere - nothing about it changes just
+  // because something is standing on it. The shadow reaches the material
+  // separately, as an attenuation three multiplies in after colorNode, and left
+  // alone it can only lay a flat grey patch over the drawing.
+  //
+  // `material.receivedShadowNode` hands us that term (0 = shadowed, 1 = lit) and
+  // takes a replacement, so the shadow can be DRAWN instead. In keeping with
+  // this method's whole idea, a shadow is not "the same drawing, darker" - it is
+  // the same drawing at a DENSER STOP, so it reads from the sheet's G/B channels
+  // rather than multiplying anything down.
+  //
+  // It reuses `tex`, so the boil, the golden-angle hop and the twist all apply
+  // to the shadow exactly as they do to the surface - the shadow re-draws itself
+  // on the same beat instead of sitting still underneath a boiling object.
+  const shadowStops = mix(tex.g, tex.b, hatchUniforms.shadowTone).mul(
+    float(1.0).sub(hatchUniforms.shadowDepth),
+  );
+  const inShadow = mix(float(0.0), shadowStops, hatchUniforms.shadowHatch);
+
+  material.receivedShadowNode = Fn(([shadow]) =>
+    mix(inShadow, float(1.0), shadow),
+  );
 
   // tslColor() does the sRGB -> linear conversion for hex numbers and
   // THREE.Color alike; texture() does it from the map's own colorSpace.

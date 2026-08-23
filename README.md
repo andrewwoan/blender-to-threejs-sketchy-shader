@@ -59,6 +59,44 @@ The clock runs continuously; `floor()` makes the drawing change only on integer
 ticks and **hold** in between. That hold is what separates a hand-drawn boil from
 a smooth animated wobble, and every noise in this repo is seeded on it.
 
+### Drawn cast shadows
+
+Both methods shade a surface by its own angle to the light. That is why a flat
+floor never hatches — its normal does not change just because something is
+standing on it — and it is why cast shadows in most stylised renderers come out
+as a **flat grey patch laid over the drawing**. The shadow arrives separately, as
+a light attenuation the renderer multiplies in *after* `colorNode`, so by default
+it can only dim what is already there.
+
+An illustrator does not do that. A cast shadow is *drawn*, with the same strokes
+as everything else. `material.receivedShadowNode` is the hook that lets you say
+so — it hands you the shadow term (`0` = shadowed, `1` = lit) and takes a
+replacement:
+
+```js
+material.receivedShadowNode = Fn(([shadow]) => mix(inShadow, float(1), shadow));
+```
+
+Return the hatch sheet instead of a constant and the strokes *become* the shadow:
+dark on a stroke, paper between them. Because it reuses the same nodes the
+surface samples, it boils in lockstep and lands on the receiving surface's own
+UVs, which is where a drawn shadow's strokes belong.
+
+Each method does it in its own idiom — A returns its boiled greyscale sheet, B
+returns the ramp's densest stops — and both expose a **`cast shadow: drawn`**
+slider. Drag it 0 → 1 to watch a flat patch turn into hatching.
+
+One thing to know if you copy this: the sheet averages well above zero, so
+substituting it straight in makes the shadow much *lighter* than the flat one it
+replaced and the objects stop sitting on the ground. Both methods pull it back
+down with a `cast shadow: depth` control, tuned so flipping `drawn` between 0 and
+1 keeps roughly the same weight. In method B that multiply is unavoidable rather
+than a fudge: shadow is "further along the tone ramp", but the ramp runs out at
+B — there is no stop denser than the densest one.
+
+> Neither source project does this. It is the one place this repo goes past what
+> it was extracted from.
+
 ---
 
 ## Layout
