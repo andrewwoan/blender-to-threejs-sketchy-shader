@@ -1,4 +1,5 @@
 import * as THREE from "three/webgpu";
+import { HELPER_LAYER } from "../../shared/lightRig.js";
 import {
   pass,
   mrt,
@@ -99,6 +100,15 @@ export function createOutlinePipeline({ scene, camera, sizes, grade }) {
   // ---- Pre-pass: view normals + object id (and the depth that comes with it)
   const prePass = pass(scene, camera);
   prePass.name = "Pre-Pass";
+
+  // Everything in the scene is inked simply by being there, which is method B's
+  // whole selling point and also means the light gizmo and helpers would get
+  // contoured like scene geometry. Keeping them off the pre-pass's layers is the
+  // fix: they still draw in the colour pass, they just contribute no edges.
+  const prePassLayers = new THREE.Layers();
+  prePassLayers.enableAll();
+  prePassLayers.disable(HELPER_LAYER);
+  prePass.setLayers(prePassLayers);
   // Transparent objects contribute nothing here - see the note in the header.
   prePass.transparent = false;
 

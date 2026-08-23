@@ -48,7 +48,11 @@ export class Pane {
     // was chosen by hand, so it stays off in both methods.
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.BasicShadowMap;
+    // VSM, not Basic or PCF. The drawn shadow needs to know how DEEP into the
+    // shadow each fragment is, and only a blurred shadow map gives a gradient to
+    // read - Basic is binary, and PCF's penumbra is a couple of shadow-map texels
+    // wide, far too narrow to grade a pencil falloff across.
+    this.renderer.shadowMap.type = THREE.VSMShadowMap;
     this.renderer.setSize(width, height, false);
     this.renderer.setPixelRatio(this.pixelRatio);
 

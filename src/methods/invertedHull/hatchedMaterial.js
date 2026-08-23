@@ -9,6 +9,7 @@ import {
   dot,
   transformNormalToView,
   normalView,
+  positionWorld,
   smoothstep,
   normalize,
   select,
@@ -18,6 +19,8 @@ import {
   positionLocal,
   mx_noise_float,
   Fn,
+  output,
+  vec4,
   color as tslColor,
 } from "three/tsl";
 import { getCrosshatchTexture } from "../../textures/crosshatch.js";
@@ -66,7 +69,48 @@ export const hatchUniforms = {
   // so without this the hatched shadow lands much LIGHTER than the flat one it
   // replaced and the objects stop sitting on the ground. Tuned so the two read
   // at about the same weight - flip `shadowHatch` between 0 and 1 to check.
-  shadowDepth: uniform(0.72),
+  shadowDepth: uniform(1.0),
+  // Cast-shadow stroke size, as a multiple of hatchScale. Coarse on purpose -
+  // see the note by `shadowStrokes`.
+  shadowScale: uniform(0.06),
+  // --- Directional falloff, along the light's cast direction ---
+  //
+  // The penumbra field above fades a shadow at EVERY edge equally, because that
+  // is all it knows: how near the boundary a fragment is. A drawn shadow does
+  // not behave that way. It is heaviest where it meets the object and thins as
+  // it runs AWAY from the light, so the fade wants to be a gradient along the
+  // ground rather than a rim.
+  //
+  // Measured in world units from `shadowAnchor` along the flattened light
+  // direction, so it is a real distance you can reason about, not a curve shape.
+  shadowFalloffStart: uniform(0.35),
+  shadowFalloffLength: uniform(2.4),
+  // Where that distance is measured from. Kept in sync with the light's target,
+  // so dragging the target gizmo moves the anchor with it.
+  shadowAnchor: uniform(vec3(0, 0, 0)),
+  // Where the fade starts and where it reaches full strength, measured on the
+  // shadow-map's own falloff field.
+  //
+  // These exist because widening the penumbra alone does NOT give a wide fade.
+  // VSM light-bleeds as its blur grows: past a modest radius the shadow does not
+  // spread, it evaporates - the core never reaches full darkness any more. So the
+  // usable part of the field is stretched back over the full range here, which
+  // restores the contrast the blur cost and makes the fade's SPATIAL width a
+  // control rather than a side effect.
+  //
+  // Widen the gap between them and more of the shadow is transition; close it up
+  // and you get a hard edge. `fadeEnd` above the field's actual peak leaves the
+  // whole shadow in fade, which is the "50% of it fades out" look.
+  shadowFadeStart: uniform(0.02),
+  shadowFadeEnd: uniform(0.35),
+  // How much the shadow's boundary is broken up, and at what scale. Without this
+  // the edge is a clean contour and gives the whole thing away as rendered.
+  //
+  // Scale is in cycles per UV unit, so it has to be read against the RECEIVER's
+  // unwrap, not the world: too fine and the lumps land far below the size of the
+  // shadow and average out into a smooth edge again.
+  shadowEdgeBreak: uniform(0.38),
+  shadowEdgeScale: uniform(3.5),
   // Per-channel normalisation. These numbers are a property of YOUR sheet, not
   // of the technique - retune them if you swap the texture. The goal is that all
   // three channels read at the same average tone, so the permute is a redraw and
@@ -135,6 +179,9 @@ export function boiledHatchStrokes(uvNode) {
  * @param {THREE.Texture} [opts.map]  optional albedo map
  * @param {number} [opts.reveal]  0 = grayscale, 1 = full colour. Lands on
  *   `material.userData.uReveal` so callers can tween it.
+ * @param {boolean} [opts.drawnShadow]  Draw cast shadows on this surface as
+ *   hatching instead of dimming them. For shadow-receiving surfaces like a
+ *   ground plane - see the note at the call site for why it is not the default.
  * @param {boolean} [opts.fluidReveal]  Adds a localised "ink bleed" reveal:
  *   colour floods in around a moving point behind a soft, noisy, BOILING edge.
  *   Exposes `material.userData.uRevealCenter` (vec3, object-local) and
@@ -147,6 +194,7 @@ export function createHatchedMaterial({
   color = 0xffffff,
   map = null,
   reveal = 1,
+  drawnShadow = false,
   fluidReveal = false,
   revealSoftness = 0.12,
   revealNoise = 0.16,
@@ -180,35 +228,141 @@ export function createHatchedMaterial({
     .mul(shadowMask)
     .mul(hatchUniforms.hatchStrength);
 
-  // --- The CAST shadow, drawn rather than dimmed ---
+  // Only surfaces that RECEIVE a cast shadow as a drawn surface want this - in
+  // practice, the ground. Left on for everything it does real damage:
   //
-  // Everything above shades the surface by its own angle to the light, which is
-  // why a flat floor never hatches: its normal does not change just because
-  // something is standing on it. The shadow arrives separately, as a light
-  // attenuation three multiplies in AFTER colorNode, so by default it can only
-  // darken the finished pixel uniformly - a flat grey patch laid over a drawing.
+  //  - Bypassing the built-in multiply throws away each mesh's own
+  //    self-shadowing, and hands it back as a flat multiply over the finished
+  //    pixel, ambient included. Objects wash out.
+  //  - The stroke and edge-noise scales are tuned against the RECEIVER's unwrap.
+  //    What reads as fine hatching across a 48-unit ground plane lands on a
+  //    1-unit cube as a couple of enormous blotches.
   //
-  // An illustrator does not do that. A cast shadow is drawn, with the same
-  // strokes as everything else, and `material.receivedShadowNode` is the hook
-  // that lets us say so: it hands us the shadow term (0 = fully shadowed,
-  // 1 = lit) and takes a replacement.
-  //
-  // So in shadow we return the hatch sheet itself instead of a constant. The
-  // strokes then ARE the shadow - dark on a stroke, paper between them - and
-  // because it is the same `hatchValue` node the surface uses, it boils in
-  // lockstep and lands on the receiving surface's own UVs, which is where a
-  // drawn shadow's strokes belong.
-  //
-  // `shadowDepth` pulls the whole thing down so the drawn shadow still reads as
-  // darker than lit paper; `shadowHatch` crossfades back to the flat patch, so
-  // the slider shows you exactly what this is doing.
-  const drawnShadow = hatchValue.mul(float(1.0).sub(hatchUniforms.shadowDepth));
-  const flatShadow = float(0.0);
-  const inShadow = mix(flatShadow, drawnShadow, hatchUniforms.shadowHatch);
+  // So it is opt-in, and everything else keeps stock shadow behaviour.
+  if (drawnShadow) {
+    // --- The CAST shadow, drawn rather than dimmed ---
+    //
+    // Everything above shades the surface by its own angle to the light, which is
+    // why a flat floor never hatches: its normal does not change just because
+    // something is standing on it. The shadow arrives separately, as a light
+    // attenuation three multiplies in AFTER colorNode, so by default it can only
+    // darken the finished pixel uniformly - a flat grey patch over a drawing.
+    //
+    // An illustrator does not do that. A cast shadow is drawn, with the same
+    // strokes as everything else.
+    //
+    // `receivedShadowNode` is the hook, but NOT the place to do the work: a
+    // texture() fetch inside it resolves to a constant however you sample it, so
+    // building the shadow there gets you a flat patch with extra steps. Plain
+    // arithmetic on uv()/screenUV does vary there, which makes the failure easy to
+    // miss - every knob still appears to respond, because the constant scales with
+    // them.
+    //
+    // So the hook is used only to CAPTURE the shadow term into a var and hand back
+    // 1, bypassing the built-in multiply. The actual darkening then happens in
+    // `outputNode`, which runs in the ordinary fragment body where sampling works
+    // normally - and the shadow gets the real sheet, boiling in lockstep with
+    // every surface around it.
+    //
+    // One consequence worth knowing: the built-in multiply only attenuates the
+    // light's own contribution, while this multiplies the finished pixel, ambient
+    // included. That is closer to what ink does to paper, but it means `depth`
+    // needs a different value than a stock shadow would.
+    const shadowFactor = float(1).toVar();
+    material.receivedShadowNode = Fn(([shadow]) => {
+      // mulAssign, not assign: more than one shadow-casting light has to compound.
+      shadowFactor.mulAssign(shadow);
+      return float(1.0);
+    });
 
-  material.receivedShadowNode = Fn(([shadow]) =>
-    mix(inShadow, float(1.0), shadow),
-  );
+    // Coarser than the surface hatch on purpose. A ground plane is minified hard
+    // and seen at a grazing angle, so surface-scale strokes fall under a pixel and
+    // the mip chain averages them straight back into the flat patch this replaces.
+    const shadowStrokes = boiledHatchStrokes(
+      uv().mul(hatchUniforms.hatchScale).mul(hatchUniforms.shadowScale),
+    );
+
+    // Same shape as the surface hatch above: ink darkness scaled by a strength.
+    // shadowHatch crossfades between a flat patch and the drawn one.
+
+    // How DEEP into the shadow this fragment sits: 1 in the core, easing to 0 at
+    // the outer edge. This is the whole reason the renderer uses a blurred (VSM)
+    // shadow map - a binary shadow is 0 or 1 and gives nothing to grade against.
+    //
+    // Two things come out of it, and both are what stops a cast shadow reading as
+    // a rendered silhouette:
+    //
+    //   CONTACT - the shadow is darkest where it is deepest, which is under and
+    //     right beside the object, and lightens as it runs away. Raising the field
+    //     to a power holds the core while pulling the falloff in.
+    //   RAGGED EDGE - a noise pushes the field around before the curve, so the
+    //     boundary breaks up instead of being a clean contour. Because the noise
+    //     moves the FIELD rather than the finished colour, strokes near the edge
+    //     thin and drop out one by one, the way a pencil lifts.
+    const depth = shadowFactor.oneMinus();
+
+    // The noise is confined to the transition band. `depth * (1 - depth)` peaks
+    // halfway through the falloff and is zero at both ends, so the core stays
+    // solid and the lit side stays clean - only the edge is roughened.
+    //
+    // Applying the noise across the whole field instead makes the shading churn
+    // over the entire shadow, which reads as the fade sliding around rather than
+    // as a broken edge.
+    const edgeBand = depth.mul(depth.oneMinus()).mul(4.0);
+
+    // The boil axis is scaled DOWN so consecutive stop-motion ticks land close
+    // together in the noise field. At full step each tick is uncorrelated and the
+    // whole edge re-rolls, which reads as crawling; at a fraction of a step the
+    // edge only shifts a little, the way a redrawn line does.
+    const edgeNoise = mx_noise_float(
+      vec3(uv().mul(hatchUniforms.shadowEdgeScale), time.mul(hatchUniforms.permuteSpeed).floor().mul(0.25)),
+    )
+      .mul(hatchUniforms.shadowEdgeBreak)
+      .mul(edgeBand);
+
+    const shadowField = smoothstep(
+      hatchUniforms.shadowFadeStart,
+      hatchUniforms.shadowFadeEnd,
+      depth.add(edgeNoise),
+    );
+
+
+    // Distance along the ground, in the direction the shadow travels.
+    //
+    // `lightDirectionWorld` points from the surface TOWARD the light, so
+    // flattening out its vertical component and negating gives the way a shadow
+    // is thrown. The length guard matters: a light straight overhead flattens to
+    // a zero vector, and normalising that is a NaN that would blacken the frame.
+    const toLight = normalize(hatchUniforms.lightDirectionWorld);
+    const flat = vec3(toLight.x, 0.0, toLight.z);
+    const cast = flat.div(max(length(flat), 0.0001)).negate();
+
+    const along = dot(positionWorld.sub(hatchUniforms.shadowAnchor), cast);
+
+    // 1 up to `start`, easing to 0 by `start + length`.
+    const directional = smoothstep(
+      hatchUniforms.shadowFalloffStart.add(hatchUniforms.shadowFalloffLength),
+      hatchUniforms.shadowFalloffStart,
+      along,
+    );
+
+    const shadowInkAmount = mix(
+      float(1.0),
+      float(1.0).sub(shadowStrokes),
+      hatchUniforms.shadowHatch,
+    )
+      .mul(shadowField)
+      .mul(directional)
+      .mul(hatchUniforms.shadowDepth);
+
+    const shadowTint = mix(
+      float(1.0).sub(shadowInkAmount),
+      float(1.0),
+      shadowFactor,
+    );
+
+    material.outputNode = vec4(output.rgb.mul(shadowTint), output.a);
+  }
 
   // --- Albedo, in the right colour space ---
   // tslColor() does the sRGB -> linear conversion for hex numbers and

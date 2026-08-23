@@ -23,6 +23,12 @@ npm run dev
 
 Needs a WebGPU-capable browser (Chrome/Edge 113+, Firefox 141+, Safari 26+).
 
+A transform gizmo on the key light sits in the left pane; drag it to move the
+light and **both** scenes relight together. Switch it between the light and its
+target under `Light (both panes)`, along with intensity, colour and the helpers.
+Only one gizmo exists on purpose — two would be two things claiming to be the
+truth, with a sync loop to arbitrate between them.
+
 Drag either half to orbit and scroll to zoom — the two cameras are locked
 together, so whichever pane you grab, both move. Orbiting is the fastest way to
 see where the two methods actually diverge: watch method A's outline hold rock
@@ -69,30 +75,137 @@ a light attenuation the renderer multiplies in *after* `colorNode`, so by defaul
 it can only dim what is already there.
 
 An illustrator does not do that. A cast shadow is *drawn*, with the same strokes
-as everything else. `material.receivedShadowNode` is the hook that lets you say
-so — it hands you the shadow term (`0` = shadowed, `1` = lit) and takes a
-replacement:
+as everything else — so here it samples the **same crosshatch sheet the surfaces
+use**, boiling on the same beat.
+
+`material.receivedShadowNode` is the hook, but it is **not** the place to do the
+work:
 
 ```js
-material.receivedShadowNode = Fn(([shadow]) => mix(inShadow, float(1), shadow));
+// The trap: a texture() fetch in here resolves to a CONSTANT, whatever UV or
+// explicit mip level you hand it. Every knob still appears to respond, because
+// the constant scales with them — so you get a flat patch with extra steps.
+material.receivedShadowNode = Fn(([shadow]) => mix(hatchFromSheet, float(1), shadow));
 ```
 
-Return the hatch sheet instead of a constant and the strokes *become* the shadow:
-dark on a stroke, paper between them. Because it reuses the same nodes the
-surface samples, it boils in lockstep and lands on the receiving surface's own
-UVs, which is where a drawn shadow's strokes belong.
+Plain arithmetic on `uv()` / `screenUV` *does* vary per fragment in there, which
+makes the failure genuinely hard to spot. Only the fetch is broken.
 
-Each method does it in its own idiom — A returns its boiled greyscale sheet, B
-returns the ramp's densest stops — and both expose a **`cast shadow: drawn`**
-slider. Drag it 0 → 1 to watch a flat patch turn into hatching.
+The way around it is to use the hook purely to **capture** the shadow and apply
+the darkening yourself, in the ordinary fragment body where sampling behaves:
 
-One thing to know if you copy this: the sheet averages well above zero, so
-substituting it straight in makes the shadow much *lighter* than the flat one it
-replaced and the objects stop sitting on the ground. Both methods pull it back
-down with a `cast shadow: depth` control, tuned so flipping `drawn` between 0 and
-1 keeps roughly the same weight. In method B that multiply is unavoidable rather
-than a fudge: shadow is "further along the tone ramp", but the ramp runs out at
-B — there is no stop denser than the densest one.
+```js
+const shadowFactor = float(1).toVar();
+
+material.receivedShadowNode = Fn(([shadow]) => {
+  shadowFactor.mulAssign(shadow); // mulAssign: several lights must compound
+  return float(1.0);              // bypass the built-in multiply
+});
+
+material.outputNode = vec4(output.rgb.mul(shadowTint), output.a);
+```
+
+One consequence worth knowing: the built-in multiply only attenuates the light's
+own contribution, whereas this multiplies the finished pixel, ambient included.
+That is closer to what ink does to paper, but `depth` needs a different value
+than a stock shadow would.
+
+Each method then does it in its own idiom — A darkens by its boiled greyscale
+sheet, B reads the sheet's denser G/B stops — and both expose `cast shadow:
+drawn`. Drag it 0 → 1 to watch a flat patch turn into hatching.
+
+#### Contact, and an edge that isn't a contour
+
+Two things separate a drawn shadow from a rendered silhouette, and both need to
+know **how deep into the shadow** a fragment sits:
+
+- **Directional falloff.** The one that actually reads as drawing. A shadow is
+  heaviest where it meets the object and thins as it runs AWAY from the light —
+  a gradient along the ground, not a rim. `light falloff: start` / `length` set
+  it, in **world units**, measured along the light direction flattened onto the
+  ground:
+
+  ```js
+  const toLight = normalize(lightDirectionWorld);        // surface → light
+  const flat = vec3(toLight.x, 0, toLight.z);
+  const cast = flat.div(max(length(flat), 1e-4)).negate(); // the way it is thrown
+  const along = dot(positionWorld.sub(anchor), cast);
+  ```
+
+  The length guard is not paranoia: a light straight overhead flattens to a zero
+  vector, and normalising that is a NaN that blackens the frame.
+
+  `anchor` tracks the light's **target**, so dragging the target gizmo drags the
+  point shadows fade away from. Note the limitation — it is one global anchor,
+  not per-caster, so an object further downwind gets a more faded shadow overall.
+  Anchoring per-object would need the occluder's distance out of the shadow map,
+  which three does not expose.
+
+- **Contact.** A shadow is heaviest under and beside the object and lightens as
+  it runs away. `cast shadow: fade start` / `fade end` set where on the falloff
+  field the shadow begins and where it reaches full strength: widen the gap and
+  more of the shadow is transition, close it up and you get a hard edge.
+
+  Two traps here. Reshaping the field with a `pow()` curve does almost nothing,
+  because the field is already 1 across the whole interior — `1^n` is still 1, so
+  you are only bending a thin rim. And widening the penumbra alone does not fix
+  that: `shadow.radius` is in **shadow-map texels**, so its worth in world units
+  is `radius * frustumWidth / mapSize` — at 1024 over a 12-unit frustum that is
+  0.012 units per texel, and even radius 8 is a hairline on a two-unit shadow.
+  Halving the map buys penumbra far more cheaply than raising the radius.
+
+  Then VSM light-bleeds as its blur grows: past a modest radius the shadow does
+  not spread, it *evaporates*, because the core stops reaching full darkness. The
+  `fade start`/`fade end` remap stretches the usable part of the field back over
+  the full range, which is what turns the fade's spatial width into a control
+  instead of a side effect. `Shadow spread (both panes)` drives the radius live.
+- **A ragged edge.** A clean boundary gives the whole thing away. A noise pushes
+  the field around *before* the curve (`edge break-up`, `edge scale`), so the edge
+  breaks up — and because the noise moves the FIELD rather than the finished
+  colour, strokes near the edge thin and drop out one by one, the way a pencil
+  lifts.
+
+  Two details make the difference between "broken edge" and "churning mess".
+  Weight the noise by `depth * (1 - depth)`, which peaks halfway through the
+  falloff and is zero at both ends, so it only touches the transition band — apply
+  it across the whole field and the shading crawls over the entire shadow. And
+  scale the boil axis *down* when feeding the stop-motion clock into the noise: at
+  a full step per tick the edge is uncorrelated frame to frame and visibly
+  crawls, where a fraction of a step just nudges it, like a line being redrawn.
+
+That depth field is why the renderer uses **`VSMShadowMap` with a wide blur**
+(`shadow.radius = 8`), not the usual `BasicShadowMap`. A binary shadow is 0 or 1
+and gives nothing to grade against; PCF's penumbra is a couple of shadow-map
+texels wide, nowhere near enough to run a pencil falloff across. The blurred map
+is not there for realism — it is the input the materials read.
+
+Watch the noise scale: it is in cycles per UV unit, so it has to be read against
+the *receiver's* unwrap. Set it far finer than the shadow itself and the lumps
+average out into a smooth edge again, which looks identical to not having it.
+
+#### It has to be opt-in
+
+`createHatchedMaterial({ drawnShadow: true })`, and only on surfaces that a cast
+shadow actually gets *drawn on* — in this scene, the ground. Turning it on for
+everything does real damage:
+
+- Bypassing the built-in multiply throws away each mesh's **own self-shadowing**
+  and hands it back as a flat multiply over the finished pixel, ambient included.
+  Objects wash out and go flat.
+- The stroke and edge-noise scales are tuned against the **receiver's unwrap**.
+  What reads as fine hatching across a 48-unit ground plane lands on a 1-unit
+  cube as a couple of enormous blotches.
+
+Everything else keeps stock shadow behaviour — which is right anyway: an object's
+own shading is already carried by the hatch.
+
+#### Two more things if you copy this
+
+Shadow strokes need to be **much coarser than the surface hatch**: a ground plane
+is minified hard and seen at a grazing angle, so surface-scale strokes fall under
+a pixel and the mip chain averages them straight back into flat grey. And the
+shadow needs a **depth** multiply on top of stroke coverage, or it lands lighter
+than the flat shadow it replaced and the objects stop sitting on the ground.
 
 > Neither source project does this. It is the one place this repo goes past what
 > it was extracted from.
@@ -107,6 +220,7 @@ src/
   shared/
     Pane.js                        canvas + renderer + camera + loop
     linkedOrbit.js                 one OrbitControls per pane, mirrored to each other
+    lightRig.js                    one gizmo-driven key light, shared by both panes
     dummyScene.js                  the cube / knot / sphere / ground, and the lights
     paperGrade.js                  paper multiply, contrast, vignette (shared by both)
   textures/
@@ -174,6 +288,14 @@ too small to threshold. The object-id channel (a hash of `modelPosition`) is wha
 draws those. Note the scale-and-bias before hashing: TSL's `hash()` starts with
 `toUint()`, which _truncates_, so raw metres would collapse a small scene onto one
 id and negative seeds are undefined.
+
+**A Raycaster only tests layer 0.** The light helpers are put on their own layer
+so method B's pre-pass can skip them — otherwise they get contoured like scene
+geometry, since that method inks everything simply for being in the scene. Doing
+the same to the transform gizmo is a trap: `TransformControls` hit-tests with its
+own `Raycaster`, and a `Raycaster`'s layer mask defaults to layer 0 only, so the
+gizmo carries on drawing while silently ignoring the pointer. Leave the gizmo on
+the default layer and host it in a pane that has no pre-pass.
 
 **Mirror the camera by position + target, not by rotation.** OrbitControls
 rebuilds its spherical state from `position - target` at the top of every

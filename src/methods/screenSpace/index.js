@@ -39,6 +39,15 @@ export function buildScreenSpacePane({ pane, camera, gui }) {
 
   return {
     scene: world.scene,
+    lighting,
+    // The hatch shades off its own light-direction uniform rather than the real
+    // light, so moving the light has to push the new direction across.
+    syncLight: () => {
+      syncLightDirection(lighting.key, hatchUniforms.lightDirectionWorld);
+      // The directional falloff measures from here, so dragging the target
+      // gizmo drags the point the shadow fades away from.
+      hatchUniforms.shadowAnchor.value.copy(lighting.key.target.position);
+    },
     output: outline.output,
     resize: (width, height) => {
       grade.setAspect(width, height);
@@ -58,8 +67,15 @@ function setupHatchGUI(gui) {
     boilAmount: hatchUniforms.boilAmount.value,
     boilRotate: hatchUniforms.boilRotate.value,
     shadowHatch: hatchUniforms.shadowHatch.value,
-    shadowTone: hatchUniforms.shadowTone.value,
     shadowDepth: hatchUniforms.shadowDepth.value,
+    shadowScale: hatchUniforms.shadowScale.value,
+    shadowFalloffStart: hatchUniforms.shadowFalloffStart.value,
+    shadowFalloffLength: hatchUniforms.shadowFalloffLength.value,
+    shadowFadeStart: hatchUniforms.shadowFadeStart.value,
+    shadowFadeEnd: hatchUniforms.shadowFadeEnd.value,
+    shadowEdgeBreak: hatchUniforms.shadowEdgeBreak.value,
+    shadowEdgeScale: hatchUniforms.shadowEdgeScale.value,
+    shadowTone: hatchUniforms.shadowTone.value,
   };
 
   const bind = (key, uniformNode, min, max, step, label) =>
@@ -76,8 +92,15 @@ function setupHatchGUI(gui) {
   bind("boilAmount", hatchUniforms.boilAmount, 0, 1, 0.005, "boil uv hop");
   bind("boilRotate", hatchUniforms.boilRotate, 0, 0.5, 0.005, "boil twist");
   bind("shadowHatch", hatchUniforms.shadowHatch, 0, 1, 0.01, "cast shadow: drawn");
-  bind("shadowTone", hatchUniforms.shadowTone, 0, 1, 0.01, "cast shadow: stop (G-B)");
   bind("shadowDepth", hatchUniforms.shadowDepth, 0, 1, 0.01, "cast shadow: depth");
+  bind("shadowScale", hatchUniforms.shadowScale, 0.01, 0.5, 0.005, "cast shadow: stroke size");
+  bind("shadowFalloffStart", hatchUniforms.shadowFalloffStart, 0, 5, 0.05, "light falloff: start");
+  bind("shadowFalloffLength", hatchUniforms.shadowFalloffLength, 0.05, 10, 0.05, "light falloff: length");
+  bind("shadowFadeStart", hatchUniforms.shadowFadeStart, 0, 1, 0.005, "cast shadow: fade start");
+  bind("shadowFadeEnd", hatchUniforms.shadowFadeEnd, 0.01, 1, 0.005, "cast shadow: fade end");
+  bind("shadowEdgeBreak", hatchUniforms.shadowEdgeBreak, 0, 1, 0.01, "cast shadow: edge break-up");
+  bind("shadowEdgeScale", hatchUniforms.shadowEdgeScale, 1, 40, 0.5, "cast shadow: edge scale");
+  bind("shadowTone", hatchUniforms.shadowTone, 0, 1, 0.01, "cast shadow: stop (G-B)");
 
   folder.close();
   return folder;

@@ -75,7 +75,13 @@ export function createDummyScene({ makeMaterial }) {
     groundUV.setXY(i, groundUV.getX(i) * 38, groundUV.getY(i) * 38);
   }
 
-  const ground = new THREE.Mesh(groundGeometry, makeMaterial({ color: 0xf2ede4 }));
+  // The ground is the surface a cast shadow actually gets DRAWN on, so it is the
+  // one that opts into hatched shadows. The objects keep stock shadow behaviour:
+  // their own shading is already carried by the hatch.
+  const ground = new THREE.Mesh(
+    groundGeometry,
+    makeMaterial({ color: 0xf2ede4, drawnShadow: true }),
+  );
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -1.15;
   ground.receiveShadow = true;
@@ -113,10 +119,31 @@ export function createLighting(scene) {
   scene.add(ambient);
 
   const key = new THREE.DirectionalLight(0xffffff, 2.2);
-  key.position.set(2.5, 4.0, 2.0);
+  // Same DIRECTION as (2.5, 4, 2) - which is all the hatching and the ortho
+  // shadow camera actually read - but pulled in until the light sits INSIDE the
+  // default framing. A gizmo handle you cannot see is a handle nobody finds, and
+  // distance is free for a directional light.
+  key.position.set(1.12, 1.64, 0.9);
   key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
-  key.shadow.camera.near = 0.5;
+  // A wide, heavily blurred penumbra. This is not for realism - it is the field
+  // the materials read to work out how deep into a shadow they are, which is
+  // what drives both the contact darkening and the fade at the edge.
+  //
+  // `radius` is in SHADOW-MAP TEXELS, so what it is worth in world units is
+  // `radius * frustumWidth / mapSize`. That is the trap: at 1024 over this
+  // 12-unit frustum a texel is 0.012 units, so even radius 8 is a 0.1-unit
+  // blur - a hairline on a shadow two units across. The fade then exists only
+  // as a thin rim, and no amount of reshaping it in the material helps, because
+  // the field is already 1 across the whole interior.
+  //
+  // Halving the map doubles the world size of a texel, which buys penumbra far
+  // more cheaply than pushing the radius alone (the blur costs
+  // 2 * blurSamples taps per shadow texel). Blockiness in the map does not
+  // matter here - it is about to be blurred hard and then drawn as strokes.
+  key.shadow.mapSize.set(512, 512);
+  key.shadow.radius = 18; // ~0.4 world units at this map size and frustum
+  key.shadow.blurSamples = 24;
+  key.shadow.camera.near = 0.1;
   key.shadow.camera.far = 20;
   key.shadow.camera.left = -6;
   key.shadow.camera.right = 6;

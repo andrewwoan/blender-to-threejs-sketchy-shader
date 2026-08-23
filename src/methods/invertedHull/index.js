@@ -59,6 +59,15 @@ export function buildInvertedHullPane({ camera, gui }) {
 
   return {
     scene: world.scene,
+    lighting,
+    // The hatch shades off its own light-direction uniform rather than the real
+    // light, so moving the light has to push the new direction across.
+    syncLight: () => {
+      syncLightDirection(lighting.key, hatchUniforms.lightDirectionWorld);
+      // The directional falloff measures from here, so dragging the target
+      // gizmo drags the point the shadow fades away from.
+      hatchUniforms.shadowAnchor.value.copy(lighting.key.target.position);
+    },
     output,
     resize: (width, height) => grade.setAspect(width, height),
     update: (delta, elapsed) => {
@@ -92,6 +101,13 @@ function setupHatchGUI(gui) {
     permuteSpeed: hatchUniforms.permuteSpeed.value,
     shadowHatch: hatchUniforms.shadowHatch.value,
     shadowDepth: hatchUniforms.shadowDepth.value,
+    shadowScale: hatchUniforms.shadowScale.value,
+    shadowFalloffStart: hatchUniforms.shadowFalloffStart.value,
+    shadowFalloffLength: hatchUniforms.shadowFalloffLength.value,
+    shadowFadeStart: hatchUniforms.shadowFadeStart.value,
+    shadowFadeEnd: hatchUniforms.shadowFadeEnd.value,
+    shadowEdgeBreak: hatchUniforms.shadowEdgeBreak.value,
+    shadowEdgeScale: hatchUniforms.shadowEdgeScale.value,
     balanceR: hatchUniforms.channelBalanceR.value,
     balanceB: hatchUniforms.channelBalanceB.value,
     contrastR: hatchUniforms.channelContrastR.value,
@@ -112,6 +128,13 @@ function setupHatchGUI(gui) {
   bind("permuteSpeed", hatchUniforms.permuteSpeed, 0, 24, 0.5, "boil (swaps/sec)");
   bind("shadowHatch", hatchUniforms.shadowHatch, 0, 1, 0.01, "cast shadow: drawn");
   bind("shadowDepth", hatchUniforms.shadowDepth, 0, 1, 0.01, "cast shadow: depth");
+  bind("shadowScale", hatchUniforms.shadowScale, 0.01, 0.5, 0.005, "cast shadow: stroke size");
+  bind("shadowFalloffStart", hatchUniforms.shadowFalloffStart, 0, 5, 0.05, "light falloff: start");
+  bind("shadowFalloffLength", hatchUniforms.shadowFalloffLength, 0.05, 10, 0.05, "light falloff: length");
+  bind("shadowFadeStart", hatchUniforms.shadowFadeStart, 0, 1, 0.005, "cast shadow: fade start");
+  bind("shadowFadeEnd", hatchUniforms.shadowFadeEnd, 0.01, 1, 0.005, "cast shadow: fade end");
+  bind("shadowEdgeBreak", hatchUniforms.shadowEdgeBreak, 0, 1, 0.01, "cast shadow: edge break-up");
+  bind("shadowEdgeScale", hatchUniforms.shadowEdgeScale, 1, 40, 0.5, "cast shadow: edge scale");
   bind("balanceR", hatchUniforms.channelBalanceR, 0, 3, 0.01, "R balance");
   bind("balanceB", hatchUniforms.channelBalanceB, 0, 3, 0.01, "B balance");
   bind("contrastR", hatchUniforms.channelContrastR, 0, 3, 0.01, "R contrast");
