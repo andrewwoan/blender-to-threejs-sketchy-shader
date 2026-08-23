@@ -2,7 +2,7 @@
 
 ![The two portfolio sites these techniques were extracted from: Katsumi Watanabe's on the left, Allen Zhang's on the right](Sketchy.webp)
 
-> Extracted from two production sites — **method A** from
+> Extracted from two demo sites using these techniques — **method A** from
 > [Katsumi Watanabe's Portfolio](https://katsumi-watanabe-folio.vercel.app/) (left
 > above), **method B** from
 > [Allen Zhang's Portfolio](https://allen-zhang-folio.vercel.app/) (right).
@@ -33,16 +33,16 @@ interior contours from angles where A shows only its silhouette.
 
 ## The two methods
 
-|                     | **A — Inverted Hull**                              | **B — Screen-Space Line Art**                                  |
-| ------------------- | -------------------------------------------------- | -------------------------------------------------------------- |
-| **Hatching**        | Sheet multiplied in through a shadow mask           | Sheet read as four tone stops: white → R → G → B                 |
-| **Hatch boil**      | Cycle which channel is sampled (R → G → B)          | Walk the sampling UV one golden angle per step                   |
-| **Outline**         | Backface-expanded duplicate geometry                | Post-process edge detection over a depth/normal/id pre-pass      |
-| **Outline boil**    | Per-vertex hash jitter on a stepped clock           | Screen-space wobble + jerk + running-dry noise on a stepped clock|
-| **Interior contours** | No — a hull is only ever a silhouette             | Yes                                                              |
-| **Line width**      | Object-space, so it varies with distance and scale  | Uniform in pixels, everywhere                                    |
-| **Cost**            | +1 draw call per mesh, no post-processing           | +1 full scene pass, 3 buffers                                    |
-| **Steadiness**      | World-space — rock steady under camera motion       | Screen-space — swims slightly as the camera moves                |
+|                       | **A — Inverted Hull**                              | **B — Screen-Space Line Art**                                     |
+| --------------------- | -------------------------------------------------- | ----------------------------------------------------------------- |
+| **Hatching**          | Sheet multiplied in through a shadow mask          | Sheet read as four tone stops: white → R → G → B                  |
+| **Hatch boil**        | Cycle which channel is sampled (R → G → B)         | Walk the sampling UV one golden angle per step                    |
+| **Outline**           | Backface-expanded duplicate geometry               | Post-process edge detection over a depth/normal/id pre-pass       |
+| **Outline boil**      | Per-vertex hash jitter on a stepped clock          | Screen-space wobble + jerk + running-dry noise on a stepped clock |
+| **Interior contours** | No — a hull is only ever a silhouette              | Yes                                                               |
+| **Line width**        | Object-space, so it varies with distance and scale | Uniform in pixels, everywhere                                     |
+| **Cost**              | +1 draw call per mesh, no post-processing          | +1 full scene pass, 3 buffers                                     |
+| **Steadiness**        | World-space — rock steady under camera motion      | Screen-space — swims slightly as the camera moves                 |
 
 Neither is "the right one". A has almost no infrastructure and composites with
 anything; B inks a whole scene with no per-mesh setup and can modulate the line
@@ -125,7 +125,7 @@ its hard shading. `Outline.smoothNormals` does this.
 **`.sample()` returns a vec4, and `dot()` on a vec4 includes alpha.** In the edge
 pass, `colorToDirection(normalTex.sample(uv))` compares four components, and
 alpha is 1 across every pixel the pre-pass drew — so `1 - dot` collapses to
-`-cos(angle)`: negative everywhere, largest on flat surfaces, and it *subtracts*
+`-cos(angle)`: negative everywhere, largest on flat surfaces, and it _subtracts_
 from the other edge terms. The symptom is a crease slider that appears to do
 nothing, or that erases silhouettes when you turn it up. Take `.rgb` and
 normalize.
@@ -134,7 +134,7 @@ normalize.
 against the wall behind it, a box sitting flat on the floor — the depth gap is
 too small to threshold. The object-id channel (a hash of `modelPosition`) is what
 draws those. Note the scale-and-bias before hashing: TSL's `hash()` starts with
-`toUint()`, which *truncates*, so raw metres would collapse a small scene onto one
+`toUint()`, which _truncates_, so raw metres would collapse a small scene onto one
 id and negative seeds are undefined.
 
 **Mirror the camera by position + target, not by rotation.** OrbitControls
@@ -161,7 +161,7 @@ exactly this reason.
 
 **Ink-bleed reveal** (method A, `fluidReveal`). Colour floods into a grayscale
 surface around a moving point in object-local space, behind an edge that is
-displaced by noise stepped on the boil clock — so the patch *jitters* like
+displaced by noise stepped on the boil clock — so the patch _jitters_ like
 boiling ink rather than flowing like a liquid. Toggle it in the GUI under
 "A — Ink-bleed reveal (sphere)".
 
@@ -177,10 +177,10 @@ comes out empty tells you where a missing line went.
 
 Both techniques were built for, and are in production on, two portfolio sites:
 
-| | Site | Method it runs |
-| --- | --- | --- |
-| Left in the screenshot | [Katsumi Watanabe's Portfolio](https://katsumi-watanabe-folio.vercel.app/) | **A** — inverted hull |
-| Right in the screenshot | [Allen Zhang's Portfolio](https://allen-zhang-folio.vercel.app/) | **B** — screen-space line art |
+|                         | Site                                                                       | Method it runs                |
+| ----------------------- | -------------------------------------------------------------------------- | ----------------------------- |
+| Left in the screenshot  | [Katsumi Watanabe's Portfolio](https://katsumi-watanabe-folio.vercel.app/) | **A** — inverted hull         |
+| Right in the screenshot | [Allen Zhang's Portfolio](https://allen-zhang-folio.vercel.app/)           | **B** — screen-space line art |
 
 ### Assets in this repo
 
