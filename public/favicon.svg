@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Hatch and Outline Lab">
+  <title>Hatch &amp; Outline Lab</title>
+
+  <!--
+    A hatch swatch: paper, strokes tightening toward the bottom-right, and a
+    hand-drawn ink border. It is the repo's subject drawn as its own icon —
+    the density ramp is the same light-to-dark tone progression the two
+    materials read out of the crosshatch sheet.
+
+    Hand-written SVG rather than a downloaded icon, for the same reason the
+    textures are generated: nothing here needs a license or an attribution.
+
+    The frame path is deliberately NOT a clean rounded rect — every corner and
+    edge is off by a few tenths of a unit, so the border reads as drawn rather
+    than as a CSS box. Invisible at 16px, but it is what stops the icon looking
+    like a UI chip at 64px and up.
+
+    The `d` is repeated in the clipPath instead of using <use>, so the fill, the
+    stroke clip, and the border are guaranteed to be the same shape in every
+    renderer.
+  -->
+
+  <defs>
+    <clipPath id="sheet">
+      <path d="M7.7 3.2 L24.3 2.9 Q29.2 3.1 28.9 7.7 L29.1 24.3 Q28.8 29.2 24.2 28.9 L7.6 29.1 Q2.9 28.8 3.2 24.2 L2.9 7.6 Q3.1 3.1 7.7 3.2 Z"/>
+    </clipPath>
+    <!-- The dark corner: only here do the two stroke directions cross. -->
+    <clipPath id="dense">
+      <polygon points="4,32 32,4 32,32"/>
+    </clipPath>
+  </defs>
+
+  <path d="M7.7 3.2 L24.3 2.9 Q29.2 3.1 28.9 7.7 L29.1 24.3 Q28.8 29.2 24.2 28.9 L7.6 29.1 Q2.9 28.8 3.2 24.2 L2.9 7.6 Q3.1 3.1 7.7 3.2 Z" fill="#f4f1ea"/>
+
+  <g clip-path="url(#sheet)" stroke="#1a1410" stroke-width="1.5" stroke-linecap="round" opacity="0.88">
+    <!-- One direction, starting at the anti-diagonal so the top-left corner stays
+         bare paper, and closing up as it descends. At 16px that empty corner is
+         the only thing carrying the light-to-dark read, so it has to be there. -->
+    <g>
+      <path d="M0 32 L32 0"/>
+      <path d="M5 32 L37 0"/>
+      <path d="M9 32 L41 0"/>
+      <path d="M12.5 32 L44.5 0"/>
+      <path d="M15.5 32 L47.5 0"/>
+      <path d="M18 32 L50 0"/>
+    </g>
+    <!-- The crossing set, confined to the dark corner. -->
+    <g clip-path="url(#dense)">
+      <path d="M-4 0 L28 32"/>
+      <path d="M1 0 L33 32"/>
+      <path d="M5.5 0 L37.5 32"/>
+      <path d="M9.5 0 L41.5 32"/>
+      <path d="M13 0 L45 32"/>
+    </g>
+  </g>
+
+  <path d="M7.7 3.2 L24.3 2.9 Q29.2 3.1 28.9 7.7 L29.1 24.3 Q28.8 29.2 24.2 28.9 L7.6 29.1 Q2.9 28.8 3.2 24.2 L2.9 7.6 Q3.1 3.1 7.7 3.2 Z"
+        fill="none" stroke="#1a1410" stroke-width="2.1" stroke-linejoin="round"/>
+</svg>

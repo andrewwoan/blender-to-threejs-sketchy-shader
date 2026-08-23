@@ -189,6 +189,10 @@ at runtime by `src/textures/` — see [The crosshatch sheet](#the-crosshatch-she
 There is no third-party image, model, font, or audio file in the build to
 attribute, and nothing to license around.
 
+`public/favicon.svg` is hand-written SVG — a hatch swatch with the same
+light-to-dark density ramp the materials read out of the sheet — so it carries no
+attribution either. It is covered by this repo's MIT license along with the code.
+
 The only binary in the repo is `Sketchy.webp` above, which is a screenshot of the
 two sites and is never loaded by the demo.
 
