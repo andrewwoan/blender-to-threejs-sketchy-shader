@@ -1,12 +1,20 @@
 # Hatch & Outline Lab
 
+![The two portfolio sites these techniques were extracted from: Katsumi Watanabe's on the left, Allen Zhang's on the right](Sketchy.webp)
+
+> Extracted from two production sites — **method A** from
+> [Katsumi Watanabe's Portfolio](https://katsumi-watanabe-folio.vercel.app/) (left
+> above), **method B** from
+> [Allen Zhang's Portfolio](https://allen-zhang-folio.vercel.app/) (right).
+
 Two ways to make a three.js scene look hand-drawn — crosshatched shading, ink
 outlines, and a stop-motion "boil" — running side by side on the same objects,
 the same lights, and the same paper grade, so the only thing that differs is the
 technique.
 
-Everything is [three.js](https://threejs.org) **WebGPU + TSL**. No binary assets:
-the crosshatch sheet and the paper are generated on a canvas at startup.
+Everything is [three.js](https://threejs.org) **WebGPU + TSL**, and the app loads
+no binary assets at all: the crosshatch sheet and the paper are generated on a
+canvas at startup.
 
 ```bash
 npm install
@@ -163,6 +171,91 @@ comes out empty tells you where a missing line went.
 
 ---
 
+## Credits
+
+### Where this came from
+
+Both techniques were built for, and are in production on, two portfolio sites:
+
+| | Site | Method it runs |
+| --- | --- | --- |
+| Left in the screenshot | [Katsumi Watanabe's Portfolio](https://katsumi-watanabe-folio.vercel.app/) | **A** — inverted hull |
+| Right in the screenshot | [Allen Zhang's Portfolio](https://allen-zhang-folio.vercel.app/) | **B** — screen-space line art |
+
+### Assets in this repo
+
+The app loads none. The crosshatch sheet and the paper stock are both generated
+at runtime by `src/textures/` — see [The crosshatch sheet](#the-crosshatch-sheet).
+There is no third-party image, model, font, or audio file in the build to
+attribute, and nothing to license around.
+
+The only binary in the repo is `Sketchy.webp` above, which is a screenshot of the
+two sites and is never loaded by the demo.
+
+### Dependencies
+
+Licenses are the `license` field each package declares at the version installed
+here.
+
+- [three.js](https://threejs.org) 0.183.2 — MIT
+- [lil-gui](https://lil-gui.georgealways.com) 0.21.0 — MIT
+- [Vite](https://vite.dev) 8 — MIT
+
+### Attributions carried over from the source projects
+
+None of the assets below ship in this repo — they belong to the two sites above.
+They are reproduced here so the attribution travels with the code it was
+extracted alongside.
+
+#### Katsumi Watanabe's Portfolio — music
+
+Music by [AtlasAudio](https://pixabay.com/users/atlasaudio-54514918/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=512255)
+from [Pixabay](https://pixabay.com/music//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=512255).
+
+#### Katsumi Watanabe's Portfolio — thunder
+
+Three one-shots, played at random per lightning strike in Scene 1. All were
+trimmed to start on their transient, faded out, peak-matched to -1dBFS, and
+encoded to Ogg Vorbis and MP3 for the web.
+
+**`thunder-crack`** — near strike
+
+> "Thunder, Very Close, Rain, 01.wav" by InspectorJ (www.jshaw.co.uk)
+
+- **Author:** InspectorJ
+- **Source:** [Thunder, Very Close, Rain, 01 — OpenGameArt.org](https://opengameart.org/content/thunder-very-close-rain-01)
+- **License:** [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/) — attribution required
+- **Changes:** cut from 1.05s (the original opens with about a second of
+  rain-only lead-in) to 9.5s long, 2.5s fade-out, +1.0dB. Original is a
+  12.8-second 16-bit/44.1kHz stereo WAV.
+
+**`thunder-roll`** — mid-distance strike
+
+- **Author:** WuxiaScrub
+- **Source:** [Rain + Long Thunder — OpenGameArt.org](https://opengameart.org/content/rain-long-thunder)
+- **License:** [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) — public domain, no attribution required (credited anyway)
+- **Changes:** cut from 21.0s (where the thunder begins in the 44-second
+  original) to 13s long, 3s fade-out, +1.5dB.
+
+**`thunder-distant`** — far strike
+
+- **Author:** WuxiaScrub
+- **Source:** [Rain + Long Thunder — OpenGameArt.org](https://opengameart.org/content/rain-long-thunder)
+- **License:** [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) — public domain, no attribution required (credited anyway)
+- **Changes:** cut from 29.5s — partway into the same roll, so it has no sharp
+  transient and reads as distant — to 9s long, 2.5s fade-out, +6.8dB.
+
+#### Libraries used by the source projects
+
+Beyond the three above, those sites also use:
+
+- [howler.js](https://howlerjs.com) 2.2.4 — MIT
+- [GSAP](https://gsap.com) 3.15.0 — [standard "no charge" license](https://gsap.com/standard-license)
+- [normalize-wheel](https://github.com/basilfx/normalize-wheel) 1.0.1 — BSD-3-Clause
+- [events](https://github.com/browserify/events) 3.3.0 — MIT
+
+---
+
 ## License
 
-MIT.
+MIT, for the code in this repository.
