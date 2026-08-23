@@ -245,6 +245,16 @@ encoded to Ogg Vorbis and MP3 for the web.
 - **Changes:** cut from 29.5s — partway into the same roll, so it has no sharp
   transient and reads as distant — to 9s long, 2.5s fade-out, +6.8dB.
 
+#### Allen Zhang's Portfolio — tree image
+
+Tree cutout used in the scenery.
+
+> Isolated Tree PNG by Vecteezy
+
+- **Asset:** [Isolated Tree PNG](https://www.vecteezy.com/png/13666709-isolated-tree-png)
+- **Source:** [Vecteezy](https://www.vecteezy.com)
+- **License:** [Vecteezy Free License](https://www.vecteezy.com/licensing-agreement) — attribution required
+
 #### Libraries used by the source projects
 
 Beyond the three above, those sites also use:
