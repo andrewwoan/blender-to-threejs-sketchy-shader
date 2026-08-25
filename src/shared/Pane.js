@@ -1,4 +1,5 @@
 import * as THREE from "three/webgpu";
+import { createInspector, createInspectorGui } from "./inspectorGui.js";
 
 // The box the camera must always contain, in world units at the subject's
 // distance, and how far back it sits. See Pane.resize.
@@ -22,13 +23,20 @@ export class Pane {
   /**
    * @param {object} opts
    * @param {HTMLCanvasElement} opts.canvas
-   * @param {(ctx: {renderer, camera, pane}) => object} opts.build  Returns
+   * @param {(ctx: {renderer, camera, pane, gui}) => object} opts.build  Returns
    *   `{ scene, output, update?, resize? }`. `output` is the TSL node the
    *   pipeline renders; `update(delta, elapsed)` runs before each frame.
+   * @param {boolean} [opts.inspector]  Host the Inspector panel on this pane's
+   *   renderer and build the shared control group from it. Exactly one pane
+   *   should set this - see the note in main.js.
+   * @param {object} [opts.gui]  The group built by the hosting pane, for panes
+   *   that draw into someone else's panel.
    */
-  constructor({ canvas, build }) {
+  constructor({ canvas, build, inspector = false, gui = null }) {
     this.canvas = canvas;
     this.build = build;
+    this.hostsInspector = inspector;
+    this.gui = gui;
     this.timer = new THREE.Timer();
   }
 
@@ -42,7 +50,16 @@ export class Pane {
       canvas: this.canvas,
       antialias: true,
     });
+
+    // Before init(), not after - see createInspector for why that ordering is
+    // load-bearing.
+    if (this.hostsInspector) this.renderer.inspector = createInspector();
+
     await this.renderer.init();
+
+    if (this.hostsInspector) {
+      this.gui = createInspectorGui(this.renderer, "hatch & outline lab");
+    }
 
     // The hatch IS the shading. Tone mapping on top of it re-grades a ramp that
     // was chosen by hand, so it stays off in both methods.
@@ -64,6 +81,7 @@ export class Pane {
       renderer: this.renderer,
       camera: this.camera,
       pane: this,
+      gui: this.gui,
     });
 
     this.scene = built.scene;

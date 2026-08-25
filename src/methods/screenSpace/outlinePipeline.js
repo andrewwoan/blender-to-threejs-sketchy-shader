@@ -95,6 +95,13 @@ export function createOutlinePipeline({ scene, camera, sizes, grade }) {
     jerkAmount: uniform(7.5), // px of lateral displacement
     jerkScale: uniform(8.0), // region frequency (low = big, rare bends)
     jerkThreshold: uniform(0.15), // higher = rarer, sharper jerks
+
+    // --- Pencil lifts ---
+    // How much of the contour is removed outright. 0 is a continuous line; this
+    // is deliberately the default, so a pane opts in rather than inheriting it.
+    lineBreak: uniform(0.0),
+    lineBreakScale: uniform(6.0), // low = long lifts, high = short nicks
+    lineBreakSoftness: uniform(0.12), // how abruptly the line stops
   };
 
   // ---- Pre-pass: view normals + object id (and the depth that comes with it)
@@ -196,6 +203,9 @@ function buildEdgeMask({ uniforms, depthTex, normalTex, idTex }) {
     jerkAmount,
     jerkScale,
     jerkThreshold,
+    lineBreak,
+    lineBreakScale,
+    lineBreakSoftness,
     cameraNear,
     cameraFar,
     normalEdgeStrength,
@@ -318,5 +328,44 @@ function buildEdgeMask({ uniforms, depthTex, normalTex, idTex }) {
   // Running-dry transparency: the same ink noise that drove the taper.
   const opacity = mix(float(1.0), inkNoise, opacityVariation);
 
-  return line.mul(opacity);
+  // --- Pencil lifts: stretches of the contour removed outright ---
+  //
+  // `opacityVariation` above cannot do this, and it is worth being clear why:
+  // it SCALES the line by a smooth field, and a smooth field never reaches
+  // zero, so the contour stays connected however far that slider is pushed. It
+  // makes a line faint. A lifted pencil does not leave a faint line, it leaves
+  // no line - so this THRESHOLDS a field instead of multiplying by it. Below the
+  // cut the line is gone, above it the line is untouched, and only a narrow band
+  // between the two is partial.
+  //
+  // Two octaves, because one alone makes every gap the same length, which reads
+  // as a dashed stroke - a pattern - rather than as a hand. The second octave
+  // breaks that regularity into short nicks and longer lifts.
+  //
+  // The field is isotropic while the contour is one-dimensional, and that is
+  // exactly what makes this work: intersecting a blobby 2D field with a thin
+  // line yields RUNS along the line, which is the shape a lift actually has. No
+  // knowledge of the contour's direction is needed.
+  //
+  // On the jerk's slower clock, so a gap persists across a couple of poses. Rolled
+  // fresh every stop-motion tick it flickers, and a line that re-breaks in a new
+  // place 6 times a second reads as noise rather than as a stroke.
+  const liftT = boil.mul(0.5);
+  const liftField = mx_noise_float(vec3(screenUV.mul(lineBreakScale), liftT))
+    .mul(0.65)
+    .add(
+      mx_noise_float(
+        vec3(screenUV.mul(lineBreakScale.mul(2.7)).add(37.1), liftT),
+      ).mul(0.35),
+    )
+    .mul(0.5)
+    .add(0.5);
+
+  // At lineBreak 0 the cut sits below the field's floor, so `lift` is 1
+  // everywhere and the line is exactly what it was before this existed. At 1 the
+  // cut is above almost all of it and barely a stroke survives.
+  const cut = mix(lineBreakSoftness.negate(), float(0.92), lineBreak);
+  const lift = smoothstep(cut, cut.add(lineBreakSoftness), liftField);
+
+  return line.mul(opacity).mul(lift);
 }

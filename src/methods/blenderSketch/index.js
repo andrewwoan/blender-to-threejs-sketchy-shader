@@ -48,6 +48,35 @@ export function buildBlenderSketchPane({ pane, camera, gui }) {
     grade,
   });
 
+  // C shares B's outline CODE but not its uniforms - createOutlinePipeline builds
+  // a fresh set on every call - so the line weight can differ per pane without
+  // one touching the other. Set before setupOutlineGUI, which seeds its controls
+  // from whatever the uniforms hold.
+  //
+  // Sub-pixel on purpose. `thickness` is the distance between the four sampled
+  // neighbours, so it is a line WIDTH in px, and C's marks are far finer than
+  // B's tone stops - B's 3px contour sits over them as a border rather than as
+  // something drawn alongside them.
+  outline.uniforms.thickness.value = 0.5;
+
+  // Heavier taper than B. The line is sub-pixel to begin with, so letting the
+  // ink field pull the sample stencil in this far is what stops the remaining
+  // segments reading as uniform-width dashes.
+  outline.uniforms.taper.value = 0.76;
+
+  // Pencil lifts. Off by default in the shared pipeline so B keeps its unbroken
+  // contour; C opts in, because a line this fine only reads as drawn if it
+  // sometimes stops. Half the contour is absent at any moment.
+  //
+  // Short nicks rather than long lifts: at this frequency the gaps land close
+  // together and the contour comes out as a broken, searching line rather than
+  // as a few long strokes with clean breaks between them. Paired with a low
+  // softness so each break is decisive - a soft edge at this gap length just
+  // fades the whole line out instead of cutting it.
+  outline.uniforms.lineBreak.value = 0.5;
+  outline.uniforms.lineBreakScale.value = 30.0;
+  outline.uniforms.lineBreakSoftness.value = 0.065;
+
   const state = { debugView: 0 };
 
   setupSketchGUI(gui);

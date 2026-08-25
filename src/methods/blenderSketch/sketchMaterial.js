@@ -60,7 +60,7 @@ export const sketchUniforms = {
   // --- The sheet, in screen space ---
   // Tiles across the screen HEIGHT. Because the coordinate is aspect-corrected,
   // this is a real mark size and not a per-object fudge factor.
-  markScale: uniform(19.0),
+  markScale: uniform(5.5),
   // Which of the six sheets in markSheets.js. Held as a float so the GUI can
   // drive it without recompiling the graph - see the note by `pickStyle`.
   style: uniform(2), // "lines"

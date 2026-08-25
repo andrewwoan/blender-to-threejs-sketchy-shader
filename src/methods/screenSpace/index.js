@@ -137,6 +137,9 @@ export function setupOutlineGUI(
     taper: u.taper.value,
     jerkAmount: u.jerkAmount.value,
     jerkThreshold: u.jerkThreshold.value,
+    lineBreak: u.lineBreak.value,
+    lineBreakScale: u.lineBreakScale.value,
+    lineBreakSoftness: u.lineBreakSoftness.value,
   };
 
   const bind = (key, uniformNode, min, max, step, label) =>
@@ -174,6 +177,11 @@ export function setupOutlineGUI(
   bindHand("jerkThreshold", u.jerkThreshold, 0, 1, 0.01, "jerk rarity");
   bindHand("taper", u.taper, 0, 1, 0.01, "taper");
   bindHand("opacityVariation", u.opacityVariation, 0, 1, 0.01, "running dry");
+  bindHand("lineBreak", u.lineBreak, 0, 1, 0.01, "pencil lifts");
+  // Range runs past C's default deliberately: 30 turned out to be the useful
+  // setting, and a control pinned to its own ceiling gives you nowhere to go.
+  bindHand("lineBreakScale", u.lineBreakScale, 1, 60, 0.5, "lift frequency");
+  bindHand("lineBreakSoftness", u.lineBreakSoftness, 0.01, 0.5, 0.005, "lift softness");
 
   // Swapping the pipeline's output node recompiles it, which is why this is a
   // debug control and not something to drive per frame.
