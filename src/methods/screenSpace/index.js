@@ -106,9 +106,20 @@ function setupHatchGUI(gui) {
   return folder;
 }
 
-function setupOutlineGUI(gui, outline, state, pane) {
+/**
+ * Exported because method C reuses this whole outline pipeline unchanged - only
+ * its hatching differs - so it may as well reuse the controls for it too. The
+ * title is a parameter purely so the two panes get their own labelled folder.
+ */
+export function setupOutlineGUI(
+  gui,
+  outline,
+  state,
+  pane,
+  title = "B - Outline (screen-space edges)",
+) {
   const u = outline.uniforms;
-  const folder = gui.addFolder("B - Outline (screen-space edges)");
+  const folder = gui.addFolder(title);
 
   const params = {
     amount: u.outlineAmount.value,

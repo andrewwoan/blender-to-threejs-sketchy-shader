@@ -2,10 +2,10 @@ import * as THREE from "three/webgpu";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 /**
- * One orbit for both panes.
+ * One orbit for every pane.
  *
  * Each pane owns its own canvas and its own camera, so each gets its own
- * OrbitControls — that is what makes either half draggable. They are then kept
+ * OrbitControls — that is what makes every pane draggable. They are then kept
  * in lockstep by mirroring whichever one the pointer is driving onto the others.
  *
  * Mirroring copies POSITION and TARGET, not the camera's rotation. OrbitControls
@@ -13,6 +13,12 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
  * `update()` and ends by calling `lookAt(target)`, so handing it those two
  * vectors is enough — it works the orientation out itself, and there is no
  * second source of truth to drift.
+ *
+ * That choice is also what makes panning free. Orbiting moves the position
+ * about a fixed target; dollying changes their separation; panning translates
+ * BOTH by the same offset. All three are fully described by the pair, so every
+ * gesture mirrors through the same two lines and none of them needs a case of
+ * its own here.
  *
  * The `syncing` latch is what stops the obvious feedback loop: writing to a
  * mirror makes IT emit `change`, which would write straight back.
@@ -27,9 +33,22 @@ export function linkOrbitControls(panes, { target = [0, -0.15, 0] } = {}) {
     orbit.target.copy(focus);
     orbit.enableDamping = true;
     orbit.dampingFactor = 0.08;
-    // Panning off: both panes have to keep framing the same thing for the
-    // comparison to mean anything, and orbit + dolly is all this scene needs.
-    orbit.enablePan = false;
+    // Panning is on, and it stays honest for the same reason orbiting does: the
+    // mirror below copies POSITION and TARGET, and a pan is precisely a matched
+    // translation of both. So it needs no handling of its own - every pane pans
+    // together, and they cannot drift out of a shared framing.
+    //
+    // Right-drag by default (OrbitControls' own `mouseButtons.RIGHT`), which
+    // also suppresses the browser context menu on the canvas while the controls
+    // are enabled. Left-drag still orbits, and the light gizmo is unaffected
+    // because TransformControls ignores any button but the left one.
+    orbit.enablePan = true;
+    // Pan along the screen plane rather than the ground plane, so dragging up
+    // moves the subject up rather than pushing it away from the camera. This is
+    // the OrbitControls default; it is set explicitly because it is the
+    // behaviour the framing here assumes.
+    orbit.screenSpacePanning = true;
+    orbit.panSpeed = 0.8;
     orbit.minDistance = 3.5;
     orbit.maxDistance = 16;
     orbit.minPolarAngle = 0.25;

@@ -12,8 +12,7 @@ import {
   sin,
   step,
   smoothstep,
-  transformNormalToView,
-  normalView,
+  normalWorld,
   positionWorld,
   normalize,
   length,
@@ -186,17 +185,25 @@ export function createHatchedMaterial({
   const tex = texture(getCrosshatchTexture(), hatchUV);
 
   // --- Tone by lighting ---
-  const lightDirView = normalize(
-    transformNormalToView(hatchUniforms.lightDirectionWorld),
-  );
+  // The direction is authored in world space, so the dot is taken in world space
+  // too. Do NOT bring it across with transformNormalToView: that helper expects
+  // an OBJECT-space normal and applies modelNormalMatrix on the way, so handing
+  // it a world vector rotates it by the model a second time. Both sides of the
+  // dot then carry the same model rotation, a rotation preserves a dot product,
+  // and the whole thing quietly collapses to dot(objectNormal, lightWorld) -
+  // shading welded to the mesh. It still tracks the light correctly, which is
+  // what makes it so easy to miss; what it stops tracking is the mesh's own
+  // rotation, so the dark side rides around with the surface as it spins.
+  const lightDirWorld = normalize(hatchUniforms.lightDirectionWorld);
 
-  // `normalView` already flips on back faces, which is correct for solid
+  // `normalWorld` is derived from `normalView`, so it already flips on back faces,
+  // which is correct for solid
   // geometry and wrong for a cutout: turning a card around negates the dot and
   // clamps it to 0, so the same drawing goes from lit to fully hatched purely
   // from which way its plane happens to point. A card has no back, so
   // double-sided materials shade off the ABSOLUTE angle - front and back then
   // read identically and a 180-degree turn no longer changes the tone.
-  const incidence = dot(normalView, lightDirView);
+  const incidence = dot(normalWorld, lightDirWorld);
   const lighting = (
     side === THREE.DoubleSide ? incidence.abs() : incidence
   ).clamp(0, 1);

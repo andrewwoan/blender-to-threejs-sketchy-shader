@@ -32,7 +32,7 @@ body {
   overflow: hidden;
 }
 
-/* The seam between the two methods. */
+/* The seams between the methods. */
 .pane + .pane {
   border-left: 1px solid rgba(26, 20, 16, 0.35);
 }
@@ -54,7 +54,9 @@ body {
   left: 0;
   padding: 1rem 1.15rem;
   pointer-events: none;
-  max-width: 30rem;
+  /* A third of the viewport is a lot narrower than a half was, so the label has
+     to give up some width or it runs under the GUI on the right-hand pane. */
+  max-width: 22rem;
 }
 
 .pane__label h1 {
@@ -102,9 +104,18 @@ body {
   display: none;
 }
 
-/* Stack the comparison once side-by-side would leave each pane too narrow to
-   frame the scene — at 8:5 each half is exactly 4:5. */
-@media (max-aspect-ratio: 8/5) {
+/* A row is the point of the thing: the three methods only compare if you can
+   see them at once, so side-by-side is the desktop layout at ANY window shape.
+
+   Stacking is reserved for screens too narrow to divide three ways — phones and
+   small tablets. Hence a width query rather than the aspect-ratio one this used
+   when there were two panes: on a 16:9 desktop the aspect is 1.78, so any
+   aspect threshold wide enough to protect a third-width pane (2.4) also fires
+   on every ordinary monitor and stacks when nobody asked it to.
+
+   64rem ~ 1024px, i.e. about 340px per pane, which is where the labels start
+   colliding with the scene. Below that a column is genuinely more readable. */
+@media (max-width: 64rem) {
   .split {
     flex-direction: column;
   }

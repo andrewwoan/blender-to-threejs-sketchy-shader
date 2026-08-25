@@ -7,8 +7,7 @@ import {
   time,
   texture,
   dot,
-  transformNormalToView,
-  normalView,
+  normalWorld,
   positionWorld,
   smoothstep,
   normalize,
@@ -204,13 +203,17 @@ export function createHatchedMaterial({
 
   // --- Lighting ---
   // The light direction is authored in world space (it is a fact about the
-  // scene), but `normalView` is in view space, so bring the direction across
-  // rather than the normal - one transform on a uniform instead of one per
-  // fragment.
-  const lightDirView = normalize(
-    transformNormalToView(hatchUniforms.lightDirectionWorld),
-  );
-  const lighting = dot(normalView, lightDirView).clamp(0, 1);
+  // scene), so the dot is taken against the world-space normal. Do NOT bring the
+  // direction across with transformNormalToView: that helper expects an
+  // OBJECT-space normal and applies modelNormalMatrix on the way, so handing it a
+  // world vector rotates it by the model a second time. Both sides of the dot
+  // then carry the same model rotation, a rotation preserves a dot product, and
+  // the whole thing quietly collapses to dot(objectNormal, lightWorld) - shading
+  // welded to the mesh. It still tracks the light correctly, which is what makes
+  // it so easy to miss; what it stops tracking is the mesh's own rotation, so the
+  // dark side rides around with the surface as it spins.
+  const lightDirWorld = normalize(hatchUniforms.lightDirectionWorld);
+  const lighting = dot(normalWorld, lightDirWorld).clamp(0, 1);
 
   // Note the reversed edge order: this ramps 0 -> 1 as `lighting` FALLS, so the
   // mask says "how much shadow is here", not "how much light".

@@ -5,12 +5,17 @@ import { linkOrbitControls } from "./shared/linkedOrbit.js";
 import { createLightRig } from "./shared/lightRig.js";
 import { buildInvertedHullPane } from "./methods/invertedHull/index.js";
 import { buildScreenSpacePane } from "./methods/screenSpace/index.js";
+import { buildBlenderSketchPane } from "./methods/blenderSketch/index.js";
 
 /**
- * Two panes, two methods, one shared scene definition.
+ * Three panes, three methods, one shared scene definition.
  *
- * Building the crosshatch sheet happens lazily inside the materials, so the
- * first pane to compile pays for it and the second gets the cached texture.
+ * Building the tone sheets happens lazily inside the materials, so the first
+ * pane to compile pays for it and the rest get the cached textures. A and B
+ * share crosshatch.js; C builds its own six-style set from markSheets.js.
+ *
+ * B and C deliberately share an outline, so the only thing that differs between
+ * those two panes is the hatching.
  */
 async function main() {
   if (!navigator.gpu) {
@@ -30,27 +35,33 @@ async function main() {
     build: ({ camera, pane }) => buildScreenSpacePane({ pane, camera, gui }),
   });
 
-  // Sequential, not Promise.all: both panes compile node materials on init, and
-  // two WebGPU devices doing that at once on a cold cache just contends.
+  const paneC = new Pane({
+    canvas: document.querySelector("#pane-c .pane__canvas"),
+    build: ({ camera, pane }) => buildBlenderSketchPane({ pane, camera, gui }),
+  });
+
+  // Sequential, not Promise.all: every pane compiles node materials on init, and
+  // three WebGPU devices doing that at once on a cold cache just contends.
   const builtA = await paneA.init();
   const builtB = await paneB.init();
+  const builtC = await paneC.init();
 
-  const panes = [paneA, paneB];
+  const panes = [paneA, paneB, paneC];
 
-  // Drag either half; both cameras follow.
+  // Drag any pane; every camera follows.
   const orbit = linkOrbitControls(panes);
 
-  // One light, one gizmo, both scenes. Built after the orbit rig because the
+  // One light, one gizmo, every scene. Built after the orbit rig because the
   // gizmo has to be able to switch orbiting off while it is being dragged.
   const lightRig = createLightRig({
     panes,
-    lightings: [builtA.lighting, builtB.lighting],
-    syncs: [builtA.syncLight, builtB.syncLight],
+    lightings: [builtA.lighting, builtB.lighting, builtC.lighting],
+    syncs: [builtA.syncLight, builtB.syncLight, builtC.syncLight],
     orbit,
     gui,
   });
 
-  setupShadowGUI(gui, [builtA.lighting, builtB.lighting]);
+  setupShadowGUI(gui, [builtA.lighting, builtB.lighting, builtC.lighting]);
 
   const resize = () => {
     for (const pane of panes) {
