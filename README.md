@@ -2,60 +2,91 @@
 
 ![The two portfolio sites these techniques were extracted from: Katsumi Watanabe's on the left, Allen Zhang's on the right](Sketchy.webp)
 
-> Extracted from two demo sites using these techniques — **method A** from
+> **A** and **B** were extracted from two demo sites using these techniques —
+> **A** from
 > [Katsumi Watanabe's Portfolio](https://katsumi-watanabe-folio.vercel.app/) (left
-> above), **method B** from
+> above), **B** from
 > [Allen Zhang's Portfolio](https://allen-zhang-folio.vercel.app/) (right).
+> **C** is a port of a Blender sketch-shader node group; **D** reimplements
+> Blender's Grease Pencil Line Art in real time.
 
-Two ways to make a three.js scene look hand-drawn — crosshatched shading, ink
+Four ways to make a three.js scene look hand-drawn — crosshatched shading, ink
 outlines, and a stop-motion "boil" — running side by side on the same objects,
 the same lights, and the same paper grade, so the only thing that differs is the
 technique.
 
+The panes are arranged so that **each neighbouring pair changes exactly one
+thing**: B and C share an outline and differ only in the hatching; C and D share
+the hatching and differ only in the outline.
+
 Everything is [three.js](https://threejs.org) **WebGPU + TSL**, and the app loads
-no binary assets at all: the crosshatch sheet and the paper are generated on a
-canvas at startup.
+no binary assets at all: every crosshatch sheet, mark style and sheet of paper is
+generated on a canvas at startup.
+
+There is a plain-English explainer of all four at
+[`about.html`](about.html), linked from the demo itself.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Needs a WebGPU-capable browser (Chrome/Edge 113+, Firefox 141+, Safari 26+).
+Prefers WebGPU (Chrome/Edge 113+, Firefox 141+, Safari 26+) and falls back to a
+WebGL2 backend on its own where WebGPU is unavailable — including over plain HTTP
+on a LAN address, where `navigator.gpu` is undefined regardless of browser
+support because it is `[SecureContext]`.
 
-A transform gizmo on the key light sits in the left pane; drag it to move the
-light and **both** scenes relight together. Switch it between the light and its
-target under `Light (both panes)`, along with intensity, colour and the helpers.
+Controls live in the **three.js Inspector's "Parameters" tab**, not a standalone
+panel. The Inspector belongs to a renderer and there are four here, so the first
+pane built hosts the one panel and the rest draw into its group.
+
+A transform gizmo on the key light sits in the first pane; drag it to move the
+light and **every** scene relights together. Switch it between the light and its
+target under `Light (all panes)`, along with intensity, colour and the helpers.
 Only one gizmo exists on purpose — two would be two things claiming to be the
 truth, with a sync loop to arbitrate between them.
 
-Drag either half to orbit and scroll to zoom — the two cameras are locked
-together, so whichever pane you grab, both move. Orbiting is the fastest way to
-see where the two methods actually diverge: watch method A's outline hold rock
-steady while method B's swims a little, and watch B keep drawing the torus knot's
-interior contours from angles where A shows only its silhouette.
+Drag any pane to orbit, right-drag to pan, scroll to zoom — all four cameras are
+locked together, so whichever pane you grab, they all move. Orbiting is the
+fastest way to see where the methods diverge: watch A's and D's outlines hold
+rock steady while B's and C's swim a little, and watch B keep drawing the torus
+knot's interior contours from angles where A shows only its silhouette.
+
+**On a phone** the layout collapses to one pane at a time, chosen with `?pane=a`
+… `?pane=d` and a switcher along the bottom. Four renderers, each with its own
+device and post chain, is not something a phone can afford — so the comparison
+becomes sequential rather than simultaneous.
 
 ---
 
-## The two methods
+## The four methods
 
-|                       | **A — Inverted Hull**                              | **B — Screen-Space Line Art**                                     |
-| --------------------- | -------------------------------------------------- | ----------------------------------------------------------------- |
-| **Hatching**          | Sheet multiplied in through a shadow mask          | Sheet read as four tone stops: white → R → G → B                  |
-| **Hatch boil**        | Cycle which channel is sampled (R → G → B)         | Walk the sampling UV one golden angle per step                    |
-| **Outline**           | Backface-expanded duplicate geometry               | Post-process edge detection over a depth/normal/id pre-pass       |
-| **Outline boil**      | Per-vertex hash jitter on a stepped clock          | Screen-space wobble + jerk + running-dry noise on a stepped clock |
-| **Interior contours** | No — a hull is only ever a silhouette              | Yes                                                               |
-| **Line width**        | Object-space, so it varies with distance and scale | Uniform in pixels, everywhere                                     |
-| **Cost**              | +1 draw call per mesh, no post-processing          | +1 full scene pass, 3 buffers                                     |
-| **Steadiness**        | World-space — rock steady under camera motion      | Screen-space — swims slightly as the camera moves                 |
+| | **A — Inverted Hull** | **B — Screen-Space Line Art** | **C — Sketch Shader** | **D — Object-Space Line Art** |
+| --- | --- | --- | --- | --- |
+| **Hatching** | Sheet multiplied in through a shadow mask | Sheet read as four tone stops: white → R → G → B | Threshold map: strokes appear in rank order | Same as C, unchanged |
+| **Marks stick to** | Mesh UVs | Mesh UVs | The screen | The screen |
+| **Tone comes from** | An authored light direction | An authored light direction | The real lit result (`Shader to RGB`) | Same as C |
+| **Hatch boil** | Cycle which channel is sampled | Walk the sampling UV one golden angle per step | Offset the whole sheet per stop-motion tick | Same as C |
+| **Outline** | Backface-expanded duplicate geometry | Edge detection over a depth/normal/id pre-pass | Same as B, unchanged | Contours read from mesh topology, chained into strokes |
+| **Interior contours** | No — a hull is only ever a silhouette | Yes | Yes | Yes |
+| **Line width** | Object-space, varies with distance | Uniform in pixels | Uniform in pixels | Uniform in pixels |
+| **Gaps along the line** | — | A screen-space field that happens to cross it | Same as B | Exact — measured along the stroke's own length |
+| **Cost grows with** | Mesh count | Screen size | Screen size | **Model detail** (a CPU solve) |
+| **Steadiness** | Rock steady under camera motion | Swims slightly | Swims slightly | Rock steady |
 
-Neither is "the right one". A has almost no infrastructure and composites with
-anything; B inks a whole scene with no per-mesh setup and can modulate the line
-per pixel. Look at the torus knot in both panes: A draws only its outside, B
-draws where the tube passes in front of itself.
+None of them is "the right one". A has almost no infrastructure and composites
+with anything; B inks a whole scene with no per-mesh setup and can modulate the
+line per pixel; C puts the marks on the paper rather than on the model and gets
+cast shadows as hatching for free; D is the only one that knows a contour is a
+*curve*, which is what lets it place gaps along a stroke rather than approximate
+them. Look at the torus knot across the panes: A draws only its outside, the
+other three draw where the tube passes in front of itself.
 
-### The one idea both boils share
+**B is the sensible default.** Reach for A when lines must never swim, C when the
+marks should read as being on a page, and D when the breaks in the line are the
+point.
+
+### The one idea every boil shares
 
 ```js
 const step = time.mul(speed).floor();
@@ -63,11 +94,18 @@ const step = time.mul(speed).floor();
 
 The clock runs continuously; `floor()` makes the drawing change only on integer
 ticks and **hold** in between. That hold is what separates a hand-drawn boil from
-a smooth animated wobble, and every noise in this repo is seeded on it.
+a smooth animated wobble, and every noise in this repo is seeded on it — method
+D runs the same idea on the CPU, since its strokes are built in JavaScript.
+
+Method D is also the one place where that clock has to be kept apart from
+another. Its contour geometry is view-dependent and must be re-solved often, or
+the outline detaches from a spinning object; its *hand* redraws a few times a
+second like everything else. Two clocks, `solve rate` and `boil`, and conflating
+them turns the lifts into noise rather than a boil.
 
 ### Drawn cast shadows
 
-Both methods shade a surface by its own angle to the light. That is why a flat
+Methods A and B shade a surface by its own angle to the light. That is why a flat
 floor never hatches — its normal does not change just because something is
 standing on it — and it is why cast shadows in most stylised renderers come out
 as a **flat grey patch laid over the drawing**. The shadow arrives separately, as
@@ -158,7 +196,7 @@ know **how deep into the shadow** a fragment sits:
   not spread, it *evaporates*, because the core stops reaching full darkness. The
   `fade start`/`fade end` remap stretches the usable part of the field back over
   the full range, which is what turns the fade's spatial width into a control
-  instead of a side effect. `Shadow spread (both panes)` drives the radius live.
+  instead of a side effect. `Shadow spread (all panes)` drives the radius live.
 - **A ragged edge.** A clean boundary gives the whole thing away. A noise pushes
   the field around *before* the curve (`edge break-up`, `edge scale`), so the edge
   breaks up — and because the noise moves the FIELD rather than the finished
@@ -215,16 +253,22 @@ than the flat shadow it replaced and the objects stop sitting on the ground.
 ## Layout
 
 ```
+index.html                         the lab
+about.html                         plain-English explainer of all four methods
 src/
-  main.js                          two panes, one rAF
+  main.js                          pane table, one render loop, the quality governor
   shared/
     Pane.js                        canvas + renderer + camera + loop
+    quality.js                     every device-dependent constant, in one table
+    governor.js                    watches frame time, steps quality down, never up
+    inspectorGui.js                three.js Inspector wired to stand in for lil-gui
     linkedOrbit.js                 one OrbitControls per pane, mirrored to each other
-    lightRig.js                    one gizmo-driven key light, shared by both panes
+    lightRig.js                    one gizmo-driven key light, shared by every pane
     dummyScene.js                  the cube / knot / sphere / ground, and the lights
-    paperGrade.js                  paper multiply, contrast, vignette (shared by both)
+    paperGrade.js                  paper multiply, contrast, vignette (shared)
   textures/
-    crosshatch.js                  procedural 3-channel tone sheet
+    crosshatch.js                  procedural 3-channel tone sheet (A, B)
+    markSheets.js                  six procedural tonal art maps (C, D)
     paper.js                       procedural paper stock
   methods/
     invertedHull/                  METHOD A
@@ -234,16 +278,26 @@ src/
     screenSpace/                   METHOD B
       hatchedMaterial.js             four tone stops + golden-angle boil
       outlinePipeline.js             MRT pre-pass + edge detection + hand noise
-      index.js                       wiring + GUI
+      index.js                       wiring + GUI (reused by C)
+    blenderSketch/                 METHOD C
+      sketchMaterial.js              screen-space marks, tone from the lit result
+      index.js                       wiring + GUI, borrows B's outline
+    objectSpace/                   METHOD D
+      edgeTopology.js                weld, edge->face adjacency, contour + crease
+      strokeBuilder.js               chaining, corner rounding, arc-length lifts
+      index.js                       wiring + GUI, borrows C's hatching
 ```
 
-Each method folder is self-contained — copy one out and it works on its own.
+A and B are self-contained — copy either folder out and it works on its own. C
+imports B's outline pipeline and D imports C's material, deliberately: that
+sharing is what makes each neighbouring pair a one-variable comparison.
 
 ---
 
-## The crosshatch sheet
+## The sheets
 
-Both methods read the same contract from the texture, and it is the thing to get
+Methods A and B read the same contract from `crosshatch.js`, and it is the thing
+to get
 right if you swap in your own:
 
 - **R = lightest** (sparse strokes), **G = middle**, **B = darkest** (dense).
@@ -258,7 +312,28 @@ right if you swap in your own:
 under a second) with wrap-around drawing so it tiles seamlessly, and a fixed PRNG
 seed so everyone sees the same sheet.
 
-Method A additionally normalises the three channels against each other
+### Method C and D's sheets are a different thing
+
+`src/textures/markSheets.js` generates six **tonal art maps** — crosshatch,
+hatch, lines, scribbles, stipples, chaotic — packed three to a texture.
+
+A tone sheet holds three *fixed* densities and the shader crossfades between
+them. A tonal art map instead encodes each stroke's **rank** in its grey level,
+so the shader just thresholds: show every stroke darker than the current tone.
+Raise the threshold and strokes *appear*, one at a time, in the gaps between
+those already there — which is what an artist does when an area needs weight, and
+it gets a continuous tone response out of one greyscale channel.
+
+The rank ordering is preserved by **draw order**, not by a blend mode. Drawing
+lightest-first with plain `source-over` gives the identical image to
+`globalCompositeOperation = "darken"`, because with opaque paint the last stroke
+to cover a pixel wins and that is by construction the darkest. It is also many
+times faster: any composite mode other than `source-over` forces a per-pixel
+read-modify-write and drops the canvas off its fast path.
+
+### Channel balance (method A only)
+
+Method A normalises the three channels against each other
 (`channelBalance*` / `channelContrast*`). Those numbers are a property of the
 sheet, not of the technique: if all three channels do not read at the same
 average tone, the channel permute becomes a brightness **flicker** instead of a
@@ -309,11 +384,65 @@ straight back.
 opacity and the sampling distance, so faint segments of the line are narrow too.
 Varying only the opacity reads as a dissolve, not as a pen running dry.
 
-**The hatch density follows the UV unwrap.** Both methods sample through the
+**The hatch density follows the UV unwrap.** Methods A and B sample through the
 mesh's own UVs, so a 1-unit cube and a 40-unit ground plane unwrapped to the same
 0..1 get wildly different stroke sizes. There is no shader setting for it — fix
 it in the geometry or in Blender. `dummyScene.js` scales the ground's UVs for
 exactly this reason.
+
+**`navigator.gpu` is `[SecureContext]`.** It is `undefined` over plain HTTP on a
+LAN address however capable the browser is, so gating startup on it reports the
+browser as the problem when the real problem is the URL. It is also unnecessary —
+`WebGPURenderer` installs its own fallback to a WebGL2 backend. Test whether a
+renderer actually came up, not whether an API exists.
+
+**A composite mode is not free.** `globalCompositeOperation = "darken"` was the
+single largest startup cost in the whole app, and it can be replaced by drawing
+in the right order. See [The sheets](#the-sheets).
+
+**Screen-uniform values do not belong in a fragment shader.** Method C's texture
+flicker offset is identical for every pixel on screen — the noise nodes in the
+Blender group it came from have nothing plugged into their `Vector` input, only
+`W`. Evaluating six gradient-noise functions per fragment to arrive at a constant
+cost compile time before it cost a cycle of runtime. It is a `vec2` uniform,
+filled once per frame in JavaScript.
+
+**Baked constants multiply your shader count.** Inlining a per-mesh tint with
+`color()` makes four meshes generate four different shaders and pay four
+compilations. As a uniform they generate byte-identical code and the node
+builder's cache serves one.
+
+**Stale strokes need a parent, not a faster clock.** Method D writes its segments
+in each mesh's *local* space and parents the stroke object to that mesh, so the
+scene graph carries the outline through the mesh's rotation for free. In world
+space a stroke solved at 12Hz sits still while the object turns out from under
+it, and the parts that end up inside the new surface get culled by the depth
+buffer and pop back on the next solve.
+
+---
+
+## Running on a phone
+
+`src/shared/quality.js` holds every device-dependent constant in one table —
+pixel ratio, MSAA, shadow map size and blur samples, sheet resolution, method D's
+solve rate. Mobile is a column in that table rather than a `matchMedia` repeated
+across five files.
+
+Two of those are worth knowing about:
+
+- **Pixel ratio** is the dominant lever, because cost goes as the *square* of it.
+  A phone reporting `devicePixelRatio` 3 clamped to 2 is drawing four times the
+  CSS pixel grid.
+- **Shadow radius is in texels**, so halving the map doubles what one is worth.
+  512 at 18 and 256 at 8 have almost the same world-space penumbra for a twelfth
+  of the blur taps.
+
+On top of that, `src/shared/governor.js` watches frame time and steps quality
+down if the device cannot keep up — a drawing at 0.6x resolution being a much
+better outcome than a crash. It reads the **median** of a window of frames so a
+single spike cannot trigger it, ignores the first 90 frames while materials
+compile, and only ever goes **down**: stepping back up is how you build an
+oscillator. Manual override is under `Performance`.
 
 ---
 
@@ -325,9 +454,19 @@ displaced by noise stepped on the boil clock — so the patch _jitters_ like
 boiling ink rather than flowing like a liquid. Toggle it in the GUI under
 "A — Ink-bleed reveal (sphere)".
 
-**Debug views** (method B). The outline folder can render the raw edge mask, the
-view-normal buffer, or the object-id buffer instead of the composite. Which stage
-comes out empty tells you where a missing line went.
+**Debug views** (methods B and C). The outline folder can render the raw edge
+mask, the view-normal buffer, or the object-id buffer instead of the composite.
+Which stage comes out empty tells you where a missing line went.
+
+**Creases** (method D). Off by default, matching the Line Art modifier in the
+source blend file. A crease is a hard *fold* in the surface rather than a
+silhouette, so inking every one turns a drawn cube into a wireframe box. Turning
+them on is also what fragments the cube's chains, since every corner then becomes
+a junction.
+
+**Mark styles** (methods C and D). Six sheets are sampled every fragment
+regardless, so switching between crosshatch, hatch, lines, scribbles, stipples
+and chaotic is a uniform write with no recompile.
 
 ---
 
@@ -342,12 +481,23 @@ Both techniques were built for, and are in production on, two portfolio sites:
 | Left in the screenshot  | [Katsumi Watanabe's Portfolio](https://katsumi-watanabe-folio.vercel.app/) | **A** — inverted hull         |
 | Right in the screenshot | [Allen Zhang's Portfolio](https://allen-zhang-folio.vercel.app/)           | **B** — screen-space line art |
 
+**C** is a port of a Blender sketch-shader node group: `Texture Coordinate >
+Window` through an aspect fix into the sampler, `Shader to RGB` for tone, a
+posterising `Bands Sharpness`, and a "Texture Flicker" group for the boil.
+
+**D** reimplements the approach of Blender's Grease Pencil **Line Art** modifier
+— classify edges from mesh topology, chain them into strokes — with one stage
+swapped so it can run in real time. Line Art raycasts every edge against the
+whole scene to decide visibility, which is why it is a bake; here the strokes are
+real geometry, so the depth buffer does it for free. The trade is that there are
+no occlusion *levels* (so no styled hidden lines) and no face intersections.
+
 ### Assets in this repo
 
 The app loads none. The crosshatch sheet and the paper stock are both generated
 at runtime by `src/textures/` — see [The crosshatch sheet](#the-crosshatch-sheet).
-There is no third-party image, model, font, or audio file in the build to
-attribute, and nothing to license around.
+`src/textures/markSheets.js` adds six more. There is no third-party image, model,
+font, or audio file in the build to attribute, and nothing to license around.
 
 `public/favicon.svg` is hand-written SVG — a hatch swatch with the same
 light-to-dark density ramp the materials read out of the sheet — so it carries no
@@ -362,8 +512,11 @@ Licenses are the `license` field each package declares at the version installed
 here.
 
 - [three.js](https://threejs.org) 0.183.2 — MIT
-- [lil-gui](https://lil-gui.georgealways.com) 0.21.0 — MIT
 - [Vite](https://vite.dev) 8 — MIT
+
+The controls are three.js's own bundled `addons/inspector`, so there is no
+separate GUI dependency. `lil-gui` is still declared in `package.json` but is no
+longer imported anywhere and can be removed.
 
 ### Attributions carried over from the source projects
 
