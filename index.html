@@ -12,7 +12,10 @@
         <canvas class="pane__canvas"></canvas>
         <header class="pane__label">
           <h1>A &middot; Inverted Hull</h1>
-          <p>Hatch multiplied into a shadow mask &middot; boil by channel permute &middot; outline as backface-expanded geometry</p>
+          <p>
+            Hatch multiplied into a shadow mask &middot; boil by channel permute
+            &middot; outline as backface-expanded geometry
+          </p>
         </header>
       </section>
 
@@ -20,24 +23,36 @@
         <canvas class="pane__canvas"></canvas>
         <header class="pane__label">
           <h1>B &middot; Screen-Space Line Art</h1>
-          <p>Hatch as four tone stops &middot; boil by golden-angle UV walk &middot; outline from a depth/normal/id edge pass</p>
+          <p>
+            Hatch as four tone stops &middot; boil by golden-angle UV walk
+            &middot; outline from a depth/normal/id edge pass
+          </p>
         </header>
       </section>
 
       <section class="pane" id="pane-c">
         <canvas class="pane__canvas"></canvas>
         <header class="pane__label">
-          <h1>C &middot; Blender Sketch Shader</h1>
-          <p>Marks thresholded in screen space &middot; tone from the lit result, posterised &middot; boil by texture flicker &middot; B&rsquo;s outline</p>
+          <h1>C &middot; Vertex Arcade's Sketch Shader</h1>
+          <p>
+            Marks thresholded in screen space &middot; tone from the lit result,
+            posterised &middot; boil by texture flicker &middot
+          </p>
         </header>
       </section>
     </main>
 
-    <p class="hint">Drag any pane to orbit &middot; right-drag to pan &middot; scroll to zoom &middot; all three cameras stay locked together</p>
+    <p class="hint">
+      Drag any pane to orbit &middot; right-drag to pan &middot; scroll to zoom
+      &middot; all three cameras stay locked together
+    </p>
 
     <div class="unsupported" id="unsupported" hidden>
       <p><strong>WebGPU is not available in this browser.</strong></p>
-      <p>Both methods are written in three.js TSL and need a WebGPU-capable browser (Chrome/Edge 113+, Firefox 141+, Safari 26+).</p>
+      <p>
+        Both methods are written in three.js TSL and need a WebGPU-capable
+        browser (Chrome/Edge 113+, Firefox 141+, Safari 26+).
+      </p>
     </div>
 
     <script type="module" src="/src/main.js"></script>
