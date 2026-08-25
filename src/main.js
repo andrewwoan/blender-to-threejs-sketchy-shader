@@ -95,7 +95,7 @@ async function main() {
  * so the control has to write to both or the comparison drifts apart.
  */
 function setupShadowGUI(gui, lightings) {
-  const folder = gui.addFolder("Shadow spread (both panes)");
+  const folder = gui.addFolder("Shadow spread (all panes)");
 
   const params = {
     // In shadow-map texels. See createLighting for what that is worth in world
