@@ -36,7 +36,11 @@ export function createLightRig({ panes, lightings, syncs, orbit, gui }) {
 
   // --- Helpers, one set per pane ---
   const helpers = panes.map((pane, i) => {
-    const light = new THREE.DirectionalLightHelper(lightings[i].key, 0.5, 0x1a1410);
+    const light = new THREE.DirectionalLightHelper(
+      lightings[i].key,
+      0.5,
+      0x1a1410,
+    );
     const frustum = new THREE.CameraHelper(lightings[i].key.shadow.camera);
     frustum.visible = false;
 
@@ -68,7 +72,15 @@ export function createLightRig({ panes, lightings, syncs, orbit, gui }) {
 
   const state = { handle: "light", visible: true, frustum: false };
 
-  setupGUI({ gui, gizmo, lightings, helpers, state, lightHandle, targetHandle });
+  setupGUI({
+    gui,
+    gizmo,
+    lightings,
+    helpers,
+    state,
+    lightHandle,
+    targetHandle,
+  });
 
   return {
     lightHandle,
@@ -100,8 +112,16 @@ export function createLightRig({ panes, lightings, syncs, orbit, gui }) {
   };
 }
 
-function setupGUI({ gui, gizmo, lightings, helpers, state, lightHandle, targetHandle }) {
-  const folder = gui.addFolder("Light (both panes)");
+function setupGUI({
+  gui,
+  gizmo,
+  lightings,
+  helpers,
+  state,
+  lightHandle,
+  targetHandle,
+}) {
+  const folder = gui.addFolder("Light (all panes)");
 
   const key = lightings[0].key;
   const params = {
@@ -111,7 +131,10 @@ function setupGUI({ gui, gizmo, lightings, helpers, state, lightHandle, targetHa
   };
 
   folder
-    .add(state, "handle", { "light position": "light", "light target": "target" })
+    .add(state, "handle", {
+      "light position": "light",
+      "light target": "target",
+    })
     .name("gizmo controls")
     .onChange((v) => gizmo.attach(v === "light" ? lightHandle : targetHandle));
 
