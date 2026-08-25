@@ -147,10 +147,17 @@ export function buildObjectSpacePane({ camera, gui }) {
   const cameraPosition = new THREE.Vector3();
   const localCamera = new THREE.Vector3();
   const inverse = new THREE.Matrix4();
-  let elapsed = 0;
   let lastSolve = -Infinity;
 
-  const solve = () => {
+  // `elapsed` is a PARAMETER, not a closure variable.
+  //
+  // It was both, briefly, and the outline stopped boiling: the update callback's
+  // own `elapsed` argument shadowed an outer accumulator, so `elapsed += delta`
+  // updated a value thrown away at the end of the frame while this function kept
+  // reading the outer one, permanently zero. Everything still ran; `pose` was
+  // just always floor(0), so the lift field never re-rolled and the gaps sat
+  // exactly where they were on the first frame.
+  const solve = (elapsed) => {
     camera.getWorldPosition(cameraPosition);
     const pose = Math.floor(elapsed * params.boilSpeed);
 
@@ -222,7 +229,6 @@ export function buildObjectSpacePane({ camera, gui }) {
     update: (delta, elapsed) => {
       updateSketchFlicker(elapsed);
       world.update(delta);
-      elapsed += delta;
 
       // Contours are view-dependent, so unlike the hatch boil this cannot simply
       // hold: the objects spin, and a held outline detaches from the shape it
@@ -233,7 +239,7 @@ export function buildObjectSpacePane({ camera, gui }) {
       if (elapsed - lastSolve < interval) return;
 
       lastSolve = elapsed;
-      solve();
+      solve(elapsed);
     },
   };
 }

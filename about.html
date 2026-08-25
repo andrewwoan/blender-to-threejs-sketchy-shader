@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <title>How These Work &middot; Hatch &amp; Outline Lab</title>
+    <style>
+      :root {
+        --ink: #1a1410;
+        --paper: #f4f1ea;
+        --rule: rgba(26, 20, 16, 0.18);
+        --dim: rgba(26, 20, 16, 0.62);
+        color-scheme: light;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: var(--paper);
+        color: var(--ink);
+        font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas,
+          monospace;
+        font-size: 15px;
+        line-height: 1.7;
+        padding: 3rem 1.25rem 6rem;
+      }
+
+      main {
+        max-width: 44rem;
+        margin: 0 auto;
+      }
+
+      a {
+        color: var(--ink);
+      }
+
+      .back {
+        display: inline-block;
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        opacity: 0.55;
+        margin-bottom: 2.5rem;
+      }
+
+      h1 {
+        font-size: 1.35rem;
+        line-height: 1.3;
+        letter-spacing: 0.02em;
+      }
+
+      .standfirst {
+        margin-top: 1rem;
+        color: var(--dim);
+      }
+
+      h2 {
+        font-size: 0.78rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        margin: 3.5rem 0 1.1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      h3 {
+        font-size: 0.95rem;
+        margin: 2rem 0 0.6rem;
+      }
+
+      p,
+      ul {
+        margin-bottom: 1rem;
+      }
+
+      ul {
+        padding-left: 1.2rem;
+      }
+
+      li {
+        margin-bottom: 0.35rem;
+      }
+
+      strong {
+        font-weight: 600;
+      }
+
+      em {
+        font-style: normal;
+        background: rgba(26, 20, 16, 0.07);
+        padding: 0.05em 0.3em;
+      }
+
+      figure {
+        margin: 1.6rem 0;
+        padding: 1.2rem;
+        border: 1px solid var(--rule);
+        background: rgba(255, 255, 255, 0.45);
+      }
+
+      figure svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        max-width: 30rem;
+        margin: 0 auto;
+      }
+
+      figcaption {
+        margin-top: 0.9rem;
+        font-size: 0.72rem;
+        line-height: 1.6;
+        color: var(--dim);
+        text-align: center;
+      }
+
+      .table-scroll {
+        overflow-x: auto;
+        margin: 1.5rem 0;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 0.76rem;
+        min-width: 34rem;
+      }
+
+      th,
+      td {
+        border: 1px solid var(--rule);
+        padding: 0.5rem 0.6rem;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        font-size: 0.68rem;
+        background: rgba(26, 20, 16, 0.05);
+      }
+
+      .verdict {
+        margin-top: 1.4rem;
+        padding: 1.1rem 1.2rem;
+        border-left: 3px solid var(--ink);
+        background: rgba(26, 20, 16, 0.045);
+      }
+
+      footer {
+        margin-top: 4rem;
+        padding-top: 1.2rem;
+        border-top: 1px solid var(--rule);
+        font-size: 0.72rem;
+        color: var(--dim);
+      }
+
+      /* Ink strokes in the diagrams. */
+      .s {
+        stroke: var(--ink);
+        fill: none;
+        stroke-width: 1.6;
+        stroke-linejoin: round;
+        stroke-linecap: round;
+      }
+      .s-thin {
+        stroke: var(--ink);
+        fill: none;
+        stroke-width: 0.9;
+        opacity: 0.45;
+      }
+      .f-paper {
+        fill: var(--paper);
+      }
+      .f-ink {
+        fill: var(--ink);
+      }
+      .f-soft {
+        fill: rgba(26, 20, 16, 0.12);
+      }
+      .lbl {
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        font-size: 9px;
+        fill: var(--ink);
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+
+  <body>
+    <main>
+      <a class="back" href="./index.html">&larr; Back to the lab</a>
+
+      <h1>Four ways to make a computer drawing look hand&#8209;drawn</h1>
+      <p class="standfirst">
+        Every pane in the lab renders the same cube, torus knot, sphere and
+        floor. What differs is how each one decides where to put ink. No
+        prior graphics knowledge assumed.
+      </p>
+
+      <h2>Two problems, not one</h2>
+      <p>
+        &ldquo;Make it look drawn&rdquo; is really two separate jobs, and every
+        method here solves both. It helps enormously to keep them apart:
+      </p>
+      <ul>
+        <li>
+          <strong>Shading</strong> &mdash; where the dark bits go. A renderer
+          would smoothly darken a surface as it turns away from the light. An
+          illustrator instead lays down <em>hatching</em>: strokes, and more of
+          them where it needs to be darker.
+        </li>
+        <li>
+          <strong>Outlines</strong> &mdash; the line around things. Photographs
+          have no outlines; drawings almost always do. Something has to decide
+          where the edges of an object are and ink them.
+        </li>
+      </ul>
+      <p>
+        The four panes are arranged so that each neighbouring pair changes
+        exactly one thing. <strong>B and C</strong> share an outline and differ
+        only in the shading. <strong>C and D</strong> share the shading and
+        differ only in the outline. That is the entire point of the layout.
+      </p>
+
+      <h2>The idea all four share: the boil</h2>
+      <p>
+        Watch any pane for a few seconds and the ink visibly twitches. That is
+        deliberate, and it is called <strong>boil</strong>.
+      </p>
+      <p>
+        In hand-drawn animation every frame is redrawn by hand, so no two frames
+        have identical strokes. The lines shimmer slightly. Our eyes read that
+        shimmer as &ldquo;a person drew this&rdquo;. A computer, left alone,
+        produces a perfectly steady image &mdash; which instantly reads as
+        machine-made.
+      </p>
+      <p>
+        So all four panes redraw their ink a few times a second and
+        <strong>hold it still in between</strong>, exactly like stop-motion
+        animation shooting &ldquo;on twos&rdquo;. In the code this is a single
+        shared line: take the clock, multiply by a speed, and throw away the
+        fractional part. Everything downstream then changes only on whole ticks.
+      </p>
+
+      <h2>Method A &mdash; Inverted Hull</h2>
+      <h3>The outline: a slightly bigger copy, inside out</h3>
+      <p>
+        Take the object. Make a second copy, slightly inflated, painted solid
+        black, and turned <em>inside out</em> so you only see its back surfaces.
+        Put the real object in front of it. The black copy is hidden everywhere
+        except for a thin rim poking out around the edges &mdash; and that rim
+        is your outline.
+      </p>
+
+      <figure>
+        <svg viewBox="0 0 300 120" role="img" aria-label="A black shape behind a slightly smaller paper-coloured shape, leaving a visible rim">
+          <circle cx="70" cy="60" r="40" class="f-ink" />
+          <circle cx="70" cy="60" r="34" class="f-paper" />
+          <circle cx="70" cy="60" r="34" class="s-thin" />
+          <text x="70" y="115" text-anchor="middle" class="lbl">rim = the line</text>
+
+          <path d="M150 60 L185 60 M178 54 L185 60 L178 66" class="s" />
+
+          <circle cx="245" cy="60" r="40" class="f-ink" />
+          <circle cx="245" cy="60" r="34" class="f-paper" />
+          <path d="M245 26 A34 34 0 0 1 245 94" class="s-thin" />
+          <text x="245" y="115" text-anchor="middle" class="lbl">what you see</text>
+        </svg>
+        <figcaption>
+          No image filtering, no cleverness &mdash; just a black shape peeking
+          out from behind a slightly smaller one.
+        </figcaption>
+      </figure>
+
+      <p>
+        It is cheap, it is rock steady when the camera moves, and it composites
+        correctly with everything because it is genuinely <em>geometry</em>, not
+        an effect painted on afterwards.
+      </p>
+      <p>
+        It also cannot draw a line where an object passes in front of
+        <em>itself</em> &mdash; look at the torus knot where the tube crosses
+        over. There is no outer edge there, so a hull produces nothing.
+      </p>
+
+      <h3>The shading: one sheet, faded in</h3>
+      <p>
+        A single crosshatch texture is multiplied over the surface, more strongly
+        where the light does not reach. Like a dimmer switch on the hatching.
+      </p>
+      <p>
+        The catch is the middle of the range. Fading a drawing halfway gives you
+        grey mush &mdash; it loses its clean whites and its solid blacks at the
+        same time. That problem is exactly what method B was built to fix.
+      </p>
+
+      <h2>Method B &mdash; Screen-Space Line Art</h2>
+      <h3>The outline: draw a line wherever the colour changes</h3>
+      <p>
+        Think about how an atlas draws borders between countries. The
+        cartographer did not measure a fence. They drew a line
+        <strong>wherever the colour changed</strong>. That is the whole trick.
+      </p>
+      <p>
+        This method renders the scene an extra time first, into three fake images
+        you never see:
+      </p>
+      <ul>
+        <li>
+          a <strong>fog</strong> image &mdash; bright close up, dark far away
+        </li>
+        <li>
+          a <strong>rainbow</strong> image &mdash; each colour means &ldquo;this
+          surface points that way&rdquo;
+        </li>
+        <li>
+          a <strong>paint-by-numbers</strong> image &mdash; every object filled
+          with one flat random colour
+        </li>
+      </ul>
+      <p>
+        Then every pixel on screen turns to its four neighbours and asks three
+        questions:
+      </p>
+
+      <figure>
+        <svg viewBox="0 0 300 130" role="img" aria-label="A centre pixel comparing itself with four neighbouring pixels">
+          <rect x="130" y="50" width="30" height="30" class="f-soft" />
+          <rect x="130" y="50" width="30" height="30" class="s" />
+          <rect x="95" y="50" width="30" height="30" class="s-thin" />
+          <rect x="165" y="50" width="30" height="30" class="s-thin" />
+          <rect x="130" y="15" width="30" height="30" class="s-thin" />
+          <rect x="130" y="85" width="30" height="30" class="s-thin" />
+          <text x="145" y="70" text-anchor="middle" class="lbl">me</text>
+          <text x="110" y="70" text-anchor="middle" class="lbl">?</text>
+          <text x="180" y="70" text-anchor="middle" class="lbl">?</text>
+          <text x="145" y="35" text-anchor="middle" class="lbl">?</text>
+          <text x="145" y="105" text-anchor="middle" class="lbl">?</text>
+          <text x="240" y="56" text-anchor="middle" class="lbl">different object?</text>
+          <text x="240" y="70" text-anchor="middle" class="lbl">much further away?</text>
+          <text x="240" y="84" text-anchor="middle" class="lbl">facing elsewhere?</text>
+        </svg>
+        <figcaption>
+          If any neighbour answers yes, the pixel paints itself black. Do that
+          for every pixel at once and the black ones form the outline.
+        </figcaption>
+      </figure>
+
+      <p>
+        Each question has a blind spot on its own, which is why all three are
+        needed. Object-identity alone gives clean silhouettes but nothing inside
+        them. Depth alone misses a crease &mdash; a cube&rsquo;s corner has no
+        depth jump, the surface just turns. Direction alone misses a flat object
+        in front of a flat wall, because both face the camera identically.
+      </p>
+      <p>
+        What this buys over method A is the line where the torus knot crosses
+        <em>itself</em>: same object, so the identity question is useless, but
+        the depth question fires loudly. It also gives a line that is the same
+        thickness in pixels at any distance.
+      </p>
+      <p>
+        The cost is that the line lives on the screen rather than on the model,
+        so it swims very slightly as the camera moves.
+      </p>
+
+      <h3>The shading: four pens instead of a dimmer</h3>
+      <p>
+        An illustrator shading a sphere does not press harder on one pen. They
+        reach for a <em>denser</em> pen. So this method keeps four drawings on
+        hand:
+      </p>
+      <ul>
+        <li>bare paper &mdash; the highlight</li>
+        <li>sparse lines, one direction &mdash; light shading</li>
+        <li>crosshatch, two directions crossing &mdash; mid-tone</li>
+        <li>dense crosshatch, three directions &mdash; deep shadow</li>
+      </ul>
+      <p>
+        Lighting picks where you are on that ladder and blends the two nearest
+        pens. Because it never fades a drawing &mdash; it <em>swaps</em> to a
+        denser one &mdash; pure paper stays pure and dense hatching stays
+        properly black. No grey mush.
+      </p>
+
+      <h2>Method C &mdash; Blender Sketch Shader</h2>
+      <p>
+        This one is a port of a shader built in Blender, and it differs from A
+        and B in three interesting ways.
+      </p>
+
+      <h3>The marks live on the paper, not on the model</h3>
+      <p>
+        In A and B the strokes are glued to the surface, so they rotate with the
+        object. Here they are fixed to the <em>screen</em> &mdash; the page you
+        are looking at. Spin an object and the ink stays put while the shape
+        turns underneath it.
+      </p>
+      <p>
+        That is much closer to how a real drawing works, and it dodges an awkward
+        problem: strokes glued to a model get stretched wherever the model&rsquo;s
+        texture layout is stretched. Look at the torus knot in panes A and B and
+        you can see the hatching smeared along the tube like wood grain. Pane C
+        never has that.
+      </p>
+
+      <h3>Tone comes from the actual lighting</h3>
+      <p>
+        A and B ignore the real lights and shade off a hand-set direction, so an
+        artist can dictate exactly where ink begins. C reads the finished, fully
+        lit image and converts brightness into mark density.
+      </p>
+      <p>
+        It gets cast shadows for free that way &mdash; a shadow makes the surface
+        darker, darker means more marks, so shadows turn into hatching with no
+        extra machinery at all. What it gives up is that fine artistic control.
+      </p>
+
+      <h3>Strokes appear one at a time</h3>
+      <p>
+        The clever part. Each stroke in the texture is stored with a
+        <strong>rank</strong>: drawn first, drawn second, drawn last. As an area
+        needs to go darker, strokes <em>appear</em> in that order &mdash;
+        arriving in the gaps between the strokes already there, never on top of
+        them.
+      </p>
+      <p>
+        That is what a real artist does when an area needs more weight, and it
+        means one greyscale image covers the entire range from paper to solid
+        black. Pane C spends that freedom on six different mark
+        <em>styles</em> instead &mdash; crosshatch, lines, scribbles, stipples
+        and so on, switchable live.
+      </p>
+
+      <h2>Method D &mdash; Object-Space Line Art</h2>
+      <p>
+        D uses C&rsquo;s shading unchanged. Only the outline is different, and it
+        is the most ambitious of the four: the same approach Blender&rsquo;s
+        Grease Pencil &ldquo;Line Art&rdquo; uses.
+      </p>
+
+      <h3>Work out the edges from the shape itself</h3>
+      <p>
+        Instead of hunting for edges in an image, D examines the 3D model
+        directly. A 3D shape is built from thousands of flat triangles. For every
+        edge shared by two of them, it asks one question:
+        <strong>do these two triangles disagree about facing the camera?</strong>
+        If one faces you and its neighbour faces away, that edge is on the
+        silhouette. Exactly, with no guessing.
+      </p>
+
+      <figure>
+        <svg viewBox="0 0 300 130" role="img" aria-label="A cube showing which edges are the outline and which are interior folds">
+          <path d="M60 40 L110 22 L160 40 L160 92 L110 110 L60 92 Z" class="f-soft" />
+          <path d="M60 40 L110 22 L160 40 L160 92 L110 110 L60 92 Z" class="s" />
+          <path d="M60 40 L110 58 L160 40 M110 58 L110 110" class="s-thin" />
+          <text x="110" y="126" text-anchor="middle" class="lbl">contour (thick) vs crease (thin)</text>
+
+          <path d="M195 66 L225 66 M218 60 L225 66 L218 72" class="s" />
+
+          <text x="252" y="52" text-anchor="middle" class="lbl">contour =</text>
+          <text x="252" y="64" text-anchor="middle" class="lbl">the outline</text>
+          <text x="252" y="82" text-anchor="middle" class="lbl">crease =</text>
+          <text x="252" y="94" text-anchor="middle" class="lbl">a fold</text>
+        </svg>
+        <figcaption>
+          A <strong>contour</strong> is where the surface turns away from you and
+          moves as you move. A <strong>crease</strong> is a hard fold in the
+          shape itself and never moves. Inking every crease turns a drawn cube
+          into a wireframe box, which is why they are off by default.
+        </figcaption>
+      </figure>
+
+      <h3>Then join them into strokes</h3>
+      <p>
+        This is the step that makes D worth the trouble. The surviving edges are
+        linked end to end into continuous lines &mdash; actual strokes with a
+        beginning, an end, and a measurable <strong>length</strong>.
+      </p>
+      <p>
+        Once you have that, you can say things the other methods cannot express
+        at all: &ldquo;lift the pencil forty percent of the way along this
+        stroke&rdquo;. That is how D does its gaps &mdash; the outline breaks up
+        the way a hand lifts off the page, rather than being erased by a pattern
+        that happens to overlap it. It is also why D can round its corners: it
+        smooths the <em>stroke</em>, the way a hand does, rather than modifying
+        the model.
+      </p>
+      <p>
+        The honest catch: working all this out is done by the CPU, in
+        JavaScript, and the cost grows with how detailed your models are. It is
+        comfortable on four simple shapes and would not be on a whole game
+        level.
+      </p>
+
+      <h2>Side by side</h2>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>A &middot; Hull</th>
+              <th>B &middot; Screen edges</th>
+              <th>C &middot; Sketch shader</th>
+              <th>D &middot; Line art</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th>Outline is</th>
+              <td>extra geometry</td>
+              <td>an image filter</td>
+              <td>same as B</td>
+              <td>real strokes</td>
+            </tr>
+            <tr>
+              <th>Marks stick to</th>
+              <td>the model</td>
+              <td>the model</td>
+              <td>the screen</td>
+              <td>the screen</td>
+            </tr>
+            <tr>
+              <th>Lines where an object crosses itself</th>
+              <td>no</td>
+              <td>yes</td>
+              <td>yes</td>
+              <td>yes</td>
+            </tr>
+            <tr>
+              <th>Even line width at any distance</th>
+              <td>no</td>
+              <td>yes</td>
+              <td>yes</td>
+              <td>yes</td>
+            </tr>
+            <tr>
+              <th>Gaps placed along the stroke</th>
+              <td>&mdash;</td>
+              <td>approximated</td>
+              <td>approximated</td>
+              <td>exactly</td>
+            </tr>
+            <tr>
+              <th>Cost grows with</th>
+              <td>object count</td>
+              <td>screen size</td>
+              <td>screen size</td>
+              <td>model detail</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="verdict">
+        <p style="margin-bottom: 0.6rem">
+          <strong>If you only want one:</strong> B is the sensible default. It
+          handles any scene without per-object setup, its line is even at any
+          distance, and it draws the interior contours that make complex shapes
+          readable.
+        </p>
+        <p style="margin-bottom: 0">
+          Take <strong>A</strong> if you need lines that never swim and compose
+          properly with transparency. Take <strong>C</strong> if you want marks
+          that read as being on paper. Take <strong>D</strong> if the gaps and
+          breaks in the line are the point &mdash; nothing else here can place
+          them properly.
+        </p>
+      </div>
+
+      <h2>One last thing</h2>
+      <p>
+        Every texture in the lab &mdash; every crosshatch sheet, every mark
+        style, the paper grain itself &mdash; is <strong>drawn from scratch in
+        your browser when the page loads</strong>. Nothing is downloaded. That is
+        the pause on the loading screen: tens of thousands of individual pencil
+        strokes being laid down, one at a time, before the first frame appears.
+      </p>
+
+      <footer>
+        <a href="./index.html">&larr; Back to the lab</a> &middot; drag to
+        orbit, right-drag to pan, and open the panel to take any of it apart.
+      </footer>
+    </main>
+  </body>
+</html>

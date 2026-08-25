@@ -97,6 +97,20 @@ body {
   opacity: 0.5;
 }
 
+/* The hint is pointer-events:none so it never eats a drag; the link inside it
+   has to opt back in or it cannot be clicked. */
+.hint__link {
+  pointer-events: auto;
+  color: var(--ink);
+  opacity: 0.85;
+}
+
+/* The switcher's last item is the explainer, not a pane - narrower, since it is
+   a single character rather than a method. */
+.pane-switch a:last-child {
+  flex: 0 0 3.5rem;
+}
+
 .unsupported {
   position: fixed;
   inset: 0;
