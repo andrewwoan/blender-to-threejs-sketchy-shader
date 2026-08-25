@@ -58,11 +58,27 @@
       &middot; all three cameras stay locked together
     </p>
 
+    <nav class="pane-switch" id="pane-switch" hidden aria-label="Method">
+      <a href="?pane=a" data-pane="a">A</a>
+      <a href="?pane=b" data-pane="b">B</a>
+      <a href="?pane=c" data-pane="c">C</a>
+      <a href="?pane=d" data-pane="d">D</a>
+    </nav>
+
+    <div class="loading" id="loading" hidden>
+      <p>Drawing the sheets&hellip;</p>
+      <p class="loading__note">
+        Every texture here is generated at runtime &mdash; this repo ships no
+        image files.
+      </p>
+    </div>
+
     <div class="unsupported" id="unsupported" hidden>
-      <p><strong>WebGPU is not available in this browser.</strong></p>
+      <p><strong>No renderer could be started.</strong></p>
       <p>
-        Both methods are written in three.js TSL and need a WebGPU-capable
-        browser (Chrome/Edge 113+, Firefox 141+, Safari 26+).
+        These methods are written in three.js TSL. They prefer WebGPU and fall
+        back to WebGL2, so this usually means the browser supports neither, or
+        the GPU refused a context.
       </p>
     </div>
 

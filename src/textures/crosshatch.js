@@ -1,4 +1,5 @@
 import * as THREE from "three/webgpu";
+import { QUALITY } from "../shared/quality.js";
 
 /**
  * The crosshatch tone sheet, generated at runtime so this repo ships no binary
@@ -25,7 +26,12 @@ import * as THREE from "three/webgpu";
  * tiles seamlessly, then packs the three passes into one RGB texture.
  */
 
-const SIZE = 1024;
+// Half size and half the strokes on a phone - see quality.js. Widths compensate
+// so the three channels keep their mean tones, which THIS method depends on more
+// than C does: the permute reads as a redraw only while all three match.
+const SIZE = QUALITY.sheetSize;
+const PX = SIZE / 1024;
+const WIDTH = PX / QUALITY.sheetDensity;
 
 // Per-channel recipe. `strokes` is what actually drives the tone; the angles are
 // the hatch directions layered on top of each other (one for the light tone, two
@@ -75,7 +81,9 @@ function drawToneLayer(spec, random) {
   ctx.lineCap = "round";
   ctx.strokeStyle = "#000000";
 
-  const perAngle = Math.round(spec.strokes / spec.angles.length);
+  const perAngle = Math.round(
+    (spec.strokes * QUALITY.sheetDensity) / spec.angles.length,
+  );
 
   for (const baseAngle of spec.angles) {
     for (let i = 0; i < perAngle; i++) {
@@ -95,7 +103,10 @@ function drawToneLayer(spec, random) {
       const cx = dx * 0.5 - Math.sin(angle) * bow;
       const cy = dy * 0.5 + Math.cos(angle) * bow;
 
-      ctx.lineWidth = lerp(spec.width[0], spec.width[1], random());
+      ctx.lineWidth = Math.max(
+        0.6,
+        lerp(spec.width[0], spec.width[1], random()) * WIDTH,
+      );
       ctx.globalAlpha = lerp(spec.alpha[0], spec.alpha[1], random());
 
       for (let ox = -1; ox <= 1; ox++) {
@@ -117,7 +128,12 @@ function drawToneLayer(spec, random) {
   }
 
   ctx.globalAlpha = 1;
-  return ctx.getImageData(0, 0, SIZE, SIZE).data;
+  const data = ctx.getImageData(0, 0, SIZE, SIZE).data;
+
+  // Free the backing store immediately - see the note in markSheets.js.
+  canvas.width = canvas.height = 0;
+
+  return data;
 }
 
 let cached = null;

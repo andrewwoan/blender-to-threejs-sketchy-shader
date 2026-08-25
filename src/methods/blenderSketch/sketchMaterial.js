@@ -7,14 +7,12 @@ import {
   vec4,
   float,
   uniform,
-  time,
   texture,
   dot,
   mix,
   select,
   smoothstep,
   output,
-  mx_noise_float,
   color as tslColor,
 } from "three/tsl";
 import { getMarkSheets, MARK_STYLES } from "../../textures/markSheets.js";
@@ -100,7 +98,46 @@ export const sketchUniforms = {
   flickerCycle: uniform(7.0),
 
   inkColor: uniform(tslColor(0x1a1410)), // dark brown ink, never pure black
+
+  // Filled by updateSketchFlicker(); see the note at the sampling site.
+  flicker: uniform(new THREE.Vector2()),
 };
+
+/** Cheap deterministic 1D value noise, mirroring the shader walk it replaced. */
+function hash1(x) {
+  const s = Math.sin(x * 127.1) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+function noise1(x) {
+  const i = Math.floor(x);
+  const f = x - i;
+  const u = f * f * (3 - 2 * f);
+  return (hash1(i) * (1 - u) + hash1(i + 1) * u) * 2 - 1;
+}
+
+/**
+ * Advance the Texture Flicker. Call once per frame, before rendering.
+ *
+ * PINGPONG folds the ever-climbing tick into a triangle wave, so the sheet
+ * bounces between a finite set of poses rather than drifting away forever - a
+ * redrawn frame revisits the same hand positions, it does not wander off. Three
+ * octaves, as in the Blender group: one alone is too regular to read as a hand.
+ */
+export function updateSketchFlicker(elapsed) {
+  const u = sketchUniforms;
+  const cycle = Math.max(1, u.flickerCycle.value);
+  const tick = Math.floor(elapsed * u.flickerSpeed.value);
+  const pong = cycle - Math.abs((tick % (cycle * 2)) - cycle);
+
+  const walk = (seed) => noise1(pong * 0.7 + seed);
+  const amount = u.flickerAmount.value;
+
+  u.flicker.value.set(
+    (walk(11.3) + walk(31.7) * 0.5 + walk(57.1) * 0.25) * amount,
+    (walk(83.9) + walk(97.3) * 0.5 + walk(113.7) * 0.25) * amount,
+  );
+}
 
 /**
  * Six samples, one index. Blender does this with a chain of `Greater Than` into
@@ -151,27 +188,20 @@ export function createSketchMaterial({
   const u = sketchUniforms;
   const sheets = getMarkSheets();
 
-  // --- Texture Flicker: one global offset per stop-motion tick ---
+  // --- Texture Flicker ---
+  //
+  // The offset is a UNIFORM, filled in by updateSketchFlicker() below, and that
+  // is not a shortcut - it is the correct place for it.
   //
   // Worth knowing, because it is not obvious from the node tree: the noise
   // textures in the Blender group have NOTHING plugged into their Vector input.
-  // Only `W` is driven, by the clock. So the noise is a walk in time alone and
-  // the offset is the SAME for every pixel on screen - the whole sheet slides as
-  // one rigid piece. It is not a per-pixel distortion, and it must not be:
-  // displacing the sheet locally would smear the strokes.
-  const tick = time.mul(u.flickerSpeed).floor();
-
-  // PINGPONG: fold the ever-climbing tick into a triangle wave.
-  const span = u.flickerCycle;
-  const pong = span.sub(tick.mod(span.mul(2.0)).sub(span).abs());
-
-  // Three octaves, as in the group - one alone is too regular to read as a hand.
-  const walk = (seed) =>
-    mx_noise_float(vec3(float(seed), float(seed * 1.7), pong));
-  const flicker = vec2(
-    walk(11.3).add(walk(31.7).mul(0.5)).add(walk(57.1).mul(0.25)),
-    walk(83.9).add(walk(97.3).mul(0.5)).add(walk(113.7).mul(0.25)),
-  ).mul(u.flickerAmount);
+  // Only `W` is driven, by the clock. So the noise is a walk in TIME alone and
+  // the offset is identical for every pixel on screen - the whole sheet slides
+  // as one rigid piece. Evaluating six gradient-noise functions per fragment to
+  // arrive at a value that is constant across the frame is pure waste, and on a
+  // phone it is waste twice over: mx_noise_float expands to a large amount of
+  // code, so it cost compile time before it cost a single cycle of runtime.
+  const flicker = u.flicker;
 
   // --- Aspect Ratio Scaling ---
   //
@@ -236,7 +266,14 @@ export function createSketchMaterial({
   ).mul(u.inkStrength);
 
   // --- Composite ---
-  const paper = tslColor(color);
+  // A UNIFORM, not a baked constant.
+  //
+  // `tslColor(color)` inlines the tint into the graph, so four meshes with four
+  // tints generate four different shaders and pay four compilations. Hoisting it
+  // to a uniform makes every sketch material generate byte-identical code, which
+  // the node builder's shader cache can then serve once - one compile for the
+  // whole scene instead of one per mesh.
+  const paper = uniform(new THREE.Color(color));
   const shaded = paper.mul(mix(float(1.0), banded.mul(0.45).add(0.55), u.shadeAmount));
 
   material.outputNode = vec4(mix(shaded, u.inkColor, shown), output.a);

@@ -4,13 +4,17 @@ import { LineSegments2 } from "three/addons/lines/webgpu/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 import { createDummyScene, createLighting } from "../../shared/dummyScene.js";
 import { createPaperGrade } from "../../shared/paperGrade.js";
-import { createSketchMaterial } from "../blenderSketch/sketchMaterial.js";
+import {
+  createSketchMaterial,
+  updateSketchFlicker,
+} from "../blenderSketch/sketchMaterial.js";
 import {
   buildEdgeTopology,
   updateWorldState,
   selectFeatureEdges,
 } from "./edgeTopology.js";
 import { chainEdges, buildStrokeSegments } from "./strokeBuilder.js";
+import { QUALITY } from "../../shared/quality.js";
 
 /**
  * METHOD D - the outline as ANALYTIC CONTOURS, the way Blender's Grease Pencil
@@ -49,8 +53,8 @@ import { chainEdges, buildStrokeSegments } from "./strokeBuilder.js";
  *    file has that option switched off too.
  */
 
-/** Enough for this scene several times over; the buffer is allocated once. */
-const MAX_SEGMENTS = 24000;
+/** Per mesh, allocated once. The torus knot is the one that needs the room. */
+const MAX_SEGMENTS = 12000;
 
 export function buildObjectSpacePane({ camera, gui }) {
   const world = createDummyScene({
@@ -68,7 +72,7 @@ export function buildObjectSpacePane({ camera, gui }) {
     creaseAngle: 0.85, // radians
     lineWidth: 2.2,
     inkColor: "#1a1410",
-    maxSegment: 0.035,
+    maxSegment: QUALITY.maxSegment,
     lift: 0.42,
     liftScale: 5.5,
     endGuard: 0.12,
@@ -77,7 +81,7 @@ export function buildObjectSpacePane({ camera, gui }) {
     // cube into a pebble. Chaikin cuts toward the inside of every corner, so a
     // high value visibly shrinks a silhouette as well as softening it.
     cornerRounding: 0.1,
-    solveHz: 0,
+    solveHz: QUALITY.solveHz,
     // Stop-motion steps per second, matching every other pane's boil. This is a
     // DIFFERENT clock from `solveHz` and the distinction is the important one:
     // solveHz is how often the contour geometry is recomputed (must be fast, the
@@ -91,21 +95,6 @@ export function buildObjectSpacePane({ camera, gui }) {
   // across the horizon - the same reason method A opts it out of the hull.
   const outlined = world.meshes.filter((mesh) => mesh !== world.ground);
 
-  let topologies = outlined.map((mesh) => ({
-    mesh,
-    topology: buildEdgeTopology(mesh.geometry, params.creaseAngle),
-  }));
-
-  // --- The stroke mesh ---
-  //
-  // One fixed-capacity buffer, filled in place. LineSegmentsGeometry rebuilds
-  // its interleaved attributes on every setPositions() call, so doing that per
-  // frame would churn a GPU buffer per frame; instead the capacity is claimed
-  // once and `instanceCount` decides how much of it is drawn.
-  const segmentData = new Float32Array(MAX_SEGMENTS * 6);
-  const lineGeometry = new LineSegmentsGeometry();
-  lineGeometry.setPositions(segmentData);
-
   const lineMaterial = new THREE.Line2NodeMaterial({
     color: new THREE.Color(params.inkColor),
     linewidth: params.lineWidth, // screen pixels
@@ -113,14 +102,40 @@ export function buildObjectSpacePane({ camera, gui }) {
     dashed: false,
   });
 
-  const strokes = new LineSegments2(lineGeometry, lineMaterial);
-  strokes.castShadow = false;
-  strokes.receiveShadow = false;
-  // The buffer holds stale data past `instanceCount`, so its bounds are
-  // meaningless - culling off the whole object rather than against a lie.
-  strokes.frustumCulled = false;
-  lineGeometry.instanceCount = 0;
-  world.scene.add(strokes);
+  // --- One stroke object per mesh, PARENTED to that mesh ---
+  //
+  // The obvious build is a single merged buffer of world-space segments, and it
+  // works right up until the solve rate drops below the frame rate. Then a stale
+  // stroke stays where the silhouette used to be while the mesh keeps turning:
+  // it detaches, and the parts that end up inside the new surface are culled by
+  // the depth buffer and pop back the next solve. That is the jitter, and it
+  // appears only on objects that actually spin.
+  //
+  // Splitting per mesh and hanging each stroke object off its own mesh fixes it
+  // with no per-frame work at all. The segments are written in LOCAL space, so
+  // the scene graph carries them through the mesh's rotation exactly. The
+  // silhouette SHAPE is still a little stale between solves - it was computed a
+  // few degrees ago - but a slightly old outline that is welded to the object
+  // reads as correct, where a current one sliding around on top of it does not.
+  const buildTopology = (mesh) =>
+    buildEdgeTopology(mesh.geometry, params.creaseAngle);
+
+  const strokeSets = outlined.map((mesh) => {
+    const data = new Float32Array(MAX_SEGMENTS * 6);
+    const geometry = new LineSegmentsGeometry();
+    geometry.setPositions(data);
+    geometry.instanceCount = 0;
+
+    const lines = new LineSegments2(geometry, lineMaterial);
+    lines.castShadow = false;
+    lines.receiveShadow = false;
+    // The buffer holds stale data past `instanceCount`, so its bounds are
+    // meaningless - cull off the whole object rather than against a lie.
+    lines.frustumCulled = false;
+    mesh.add(lines);
+
+    return { mesh, topology: buildTopology(mesh), data, geometry, segments: [] };
+  });
 
   const grade = createPaperGrade();
 
@@ -130,54 +145,63 @@ export function buildObjectSpacePane({ camera, gui }) {
   const output = grade.vignette(grade.grade(scenePass.getTextureNode()));
 
   const cameraPosition = new THREE.Vector3();
-  const segments = [];
+  const localCamera = new THREE.Vector3();
+  const inverse = new THREE.Matrix4();
   let elapsed = 0;
   let lastSolve = -Infinity;
 
   const solve = () => {
     camera.getWorldPosition(cameraPosition);
+    const pose = Math.floor(elapsed * params.boilSpeed);
 
-    const meshChains = [];
-    for (const { mesh, topology } of topologies) {
-      mesh.updateWorldMatrix(true, false);
-      updateWorldState(topology, mesh.matrixWorld, cameraPosition);
+    for (const set of strokeSets) {
+      set.mesh.updateWorldMatrix(true, false);
 
-      const selected = selectFeatureEdges(topology, {
+      // Facing is still decided in world space - it has to be, it is a question
+      // about the camera - while the segments come back in local space.
+      updateWorldState(set.topology, set.mesh.matrixWorld, cameraPosition);
+
+      const selected = selectFeatureEdges(set.topology, {
         contour: params.contour,
         crease: params.crease,
       });
 
-      meshChains.push({ topology, chains: chainEdges(topology, selected) });
+      const chains = chainEdges(set.topology, selected);
+
+      // The depth bias nudges each stroke toward the viewer, so the camera has
+      // to be expressed in the same space the segments are written in.
+      inverse.copy(set.mesh.matrixWorld).invert();
+      localCamera.copy(cameraPosition).applyMatrix4(inverse);
+
+      buildStrokeSegments(
+        [{ topology: set.topology, chains }],
+        localCamera,
+        {
+          maxSegment: params.maxSegment,
+          lift: params.lift,
+          liftScale: params.liftScale,
+          endGuard: params.endGuard,
+          depthBias: params.depthBias,
+          cornerRounding: params.cornerRounding,
+          pose,
+        },
+        set.segments,
+      );
+
+      // Copied element-wise so an overflowing solve is clamped rather than
+      // throwing, and so nothing allocates on the hot path.
+      const floats = Math.min(set.segments.length, set.data.length);
+      for (let i = 0; i < floats; i++) set.data[i] = set.segments[i];
+
+      set.geometry.attributes.instanceStart.data.needsUpdate = true;
+      set.geometry.instanceCount = floats / 6;
     }
-
-    buildStrokeSegments(meshChains, cameraPosition, {
-      maxSegment: params.maxSegment,
-      lift: params.lift,
-      liftScale: params.liftScale,
-      endGuard: params.endGuard,
-      depthBias: params.depthBias,
-      cornerRounding: params.cornerRounding,
-      // floor(), exactly as the shader boils do: the clock runs continuously but
-      // the drawing only changes on integer ticks, so each pose is HELD.
-      pose: Math.floor(elapsed * params.boilSpeed),
-    }, segments);
-
-    // Copied element-wise rather than via set()/slice() so an overflowing solve
-    // is clamped instead of throwing, and so nothing allocates on the hot path.
-    const floats = Math.min(segments.length, segmentData.length);
-    for (let i = 0; i < floats; i++) segmentData[i] = segments[i];
-
-    lineGeometry.attributes.instanceStart.data.needsUpdate = true;
-    lineGeometry.instanceCount = floats / 6;
   };
 
   setupGUI(gui, params, {
     lineMaterial,
     rebuildTopology: () => {
-      topologies = outlined.map((mesh) => ({
-        mesh,
-        topology: buildEdgeTopology(mesh.geometry, params.creaseAngle),
-      }));
+      for (const set of strokeSets) set.topology = buildTopology(set.mesh);
     },
   });
 
@@ -187,9 +211,16 @@ export function buildObjectSpacePane({ camera, gui }) {
     // D shades off the real lit result, exactly as C does, so there is nothing
     // for the light rig to publish.
     syncLight: () => {},
+    // The governor's ladder ends in a solve rate; 0 means "whatever quality.js
+    // chose for this device", so full quality does not override a mobile
+    // default that was already deliberate.
+    setQuality: (solveHz) => {
+      params.solveHz = solveHz === 0 ? QUALITY.solveHz : solveHz;
+    },
     output,
     resize: (width, height) => grade.setAspect(width, height),
-    update: (delta) => {
+    update: (delta, elapsed) => {
+      updateSketchFlicker(elapsed);
       world.update(delta);
       elapsed += delta;
 

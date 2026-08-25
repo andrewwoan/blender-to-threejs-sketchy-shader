@@ -1,4 +1,5 @@
 import * as THREE from "three/webgpu";
+import { QUALITY } from "../shared/quality.js";
 
 /**
  * Paper stock, generated at runtime. Both methods multiply the finished frame
@@ -39,7 +40,7 @@ export function getPaperTexture() {
   // the base tone, so the grain has structure rather than just being per-pixel
   // noise (which mostly disappears once it is minified).
   ctx.lineCap = "round";
-  for (let i = 0; i < 26000; i++) {
+  for (let i = 0; i < QUALITY.paperStrokes; i++) {
     const x = random() * SIZE;
     const y = random() * SIZE;
     const angle = random() * Math.PI * 2;

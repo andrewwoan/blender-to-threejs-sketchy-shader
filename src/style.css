@@ -114,22 +114,96 @@ body {
   display: none;
 }
 
-/* A row is the point of the thing: the three methods only compare if you can
-   see them at once, so side-by-side is the desktop layout at ANY window shape.
+/* Shown while the generators run. They block the main thread, so this has to be
+   painted BEFORE they start - see the double rAF in main.js. */
+.loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 0.6rem;
+  padding: 2rem;
+  text-align: center;
+  background: var(--paper);
+  font-size: 0.82rem;
+  z-index: 20;
+}
 
-   Stacking is reserved for screens too narrow to divide three ways — phones and
-   small tablets. Hence a width query rather than the aspect-ratio one this used
-   when there were two panes: on a 16:9 desktop the aspect is 1.78, so any
-   aspect threshold wide enough to protect a third-width pane (2.4) also fires
-   on every ordinary monitor and stacks when nobody asked it to.
+.loading[hidden] {
+  display: none;
+}
 
-   64rem ~ 1024px, i.e. about 340px per pane, which is where the labels start
-   colliding with the scene. Below that a column is genuinely more readable. */
+.loading__note {
+  font-size: 0.68rem;
+  opacity: 0.55;
+  max-width: 22rem;
+}
+
+/* The 2x2 grid is the point of the thing: the methods only compare if you can
+   see them at once, so it is the desktop layout at ANY window shape. A width
+   query rather than an aspect one, because on a 16:9 desktop the aspect is 1.78
+   and any threshold wide enough to protect a quarter-width pane also fires on
+   every ordinary monitor.
+
+   Below 64rem (~1024px) a pane would be too narrow to frame the scene, so the
+   layout drops to one pane - and main.js only BUILDS one, since four renderers
+   is what a phone actually cannot afford. selectPanes() matches this exact
+   query; the layout and the build have to agree about what "mobile" means.
+
+   `grid-auto-rows` is the safety net: narrow the window after load and the four
+   already-built panes still divide the height evenly rather than piling into
+   one cell. */
 @media (max-width: 64rem) {
   .split {
     grid-template-columns: 1fr;
-    grid-template-rows: repeat(4, 1fr);
+    grid-template-rows: 1fr;
+    grid-auto-rows: 1fr;
   }
+
+  /* The switcher takes the hint's place; orbiting still works, but the pointer
+     hints matter less than being able to reach the other three methods. */
+  .hint {
+    display: none;
+  }
+}
+
+/* Shown only when a single pane was built. Each link is an ordinary navigation:
+   reloading is the simplest correct way to tear down a WebGPU device and stand
+   the next method up in its place. */
+.pane-switch {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  z-index: 10;
+  border-top: 1px solid rgba(26, 20, 16, 0.35);
+  background: var(--paper);
+}
+
+.pane-switch[hidden] {
+  display: none;
+}
+
+.pane-switch a {
+  flex: 1 1 0;
+  padding: 0.85rem 0;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  color: var(--ink);
+  opacity: 0.45;
+}
+
+.pane-switch a + a {
+  border-left: 1px solid rgba(26, 20, 16, 0.18);
+}
+
+.pane-switch a[aria-current="page"] {
+  opacity: 1;
+  background: rgba(26, 20, 16, 0.08);
 }
 
 /* The controls are the three.js Inspector now, which ships its own stylesheet

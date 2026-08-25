@@ -1,5 +1,6 @@
 import * as THREE from "three/webgpu";
 import { createInspector, createInspectorGui } from "./inspectorGui.js";
+import { QUALITY } from "./quality.js";
 
 // The box the camera must always contain, in world units at the subject's
 // distance, and how far back it sits. See Pane.resize.
@@ -34,6 +35,9 @@ export class Pane {
    */
   constructor({ canvas, build, inspector = false, gui = null }) {
     this.canvas = canvas;
+    // Multiplier the performance governor drives, on top of whatever quality.js
+    // chose for this device. 1 until something is measured to be too slow.
+    this.qualityScale = 1;
     this.build = build;
     this.hostsInspector = inspector;
     this.gui = gui;
@@ -44,11 +48,12 @@ export class Pane {
     const { clientWidth: width, clientHeight: height } = this.canvas;
     this.width = width;
     this.height = height;
-    this.pixelRatio = Math.min(window.devicePixelRatio, 2);
+    this.pixelRatio =
+      Math.min(window.devicePixelRatio, QUALITY.pixelRatio) * this.qualityScale;
 
     this.renderer = new THREE.WebGPURenderer({
       canvas: this.canvas,
-      antialias: true,
+      antialias: QUALITY.antialias,
     });
 
     // Before init(), not after - see createInspector for why that ordering is
@@ -100,7 +105,8 @@ export class Pane {
 
     this.width = width;
     this.height = height;
-    this.pixelRatio = Math.min(window.devicePixelRatio, 2);
+    this.pixelRatio =
+      Math.min(window.devicePixelRatio, QUALITY.pixelRatio) * this.qualityScale;
 
     // Contain-fit the framing box, rather than leaving the vertical FOV fixed.
     //
@@ -122,6 +128,17 @@ export class Pane {
     this.renderer.setSize(width, height, false);
 
     this.onResize?.(width, height);
+  }
+
+  /**
+   * Re-scale the drawing buffer without touching the layout. Re-runs resize
+   * rather than calling setPixelRatio alone, so the renderer and the camera
+   * agree about the new buffer in one step.
+   */
+  setQualityScale(scale) {
+    if (scale === this.qualityScale) return;
+    this.qualityScale = scale;
+    this.resize(this.width, this.height);
   }
 
   render() {

@@ -1,4 +1,5 @@
 import * as THREE from "three/webgpu";
+import { QUALITY } from "./quality.js";
 
 /**
  * The stand-in for a real scene. Both panes build an identical copy of this, so
@@ -140,9 +141,11 @@ export function createLighting(scene) {
   // more cheaply than pushing the radius alone (the blur costs
   // 2 * blurSamples taps per shadow texel). Blockiness in the map does not
   // matter here - it is about to be blurred hard and then drawn as strokes.
-  key.shadow.mapSize.set(512, 512);
-  key.shadow.radius = 18; // ~0.4 world units at this map size and frustum
-  key.shadow.blurSamples = 24;
+  key.shadow.mapSize.set(QUALITY.shadowMapSize, QUALITY.shadowMapSize);
+  // Radius is in TEXELS, so halving the map doubles what one is worth - see
+  // quality.js. Both settings together keep the same world-space penumbra.
+  key.shadow.radius = QUALITY.shadowRadius;
+  key.shadow.blurSamples = QUALITY.shadowBlurSamples;
   key.shadow.camera.near = 0.1;
   key.shadow.camera.far = 20;
   key.shadow.camera.left = -6;

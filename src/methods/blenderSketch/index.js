@@ -7,6 +7,7 @@ import {
 import { setupOutlineGUI } from "../screenSpace/index.js";
 import {
   createSketchMaterial,
+  updateSketchFlicker,
   sketchUniforms,
   MARK_STYLES,
 } from "./sketchMaterial.js";
@@ -93,7 +94,8 @@ export function buildBlenderSketchPane({ pane, camera, gui }) {
       grade.setAspect(width, height);
       outline.setResolution(width, height);
     },
-    update: (delta) => {
+    update: (delta, elapsed) => {
+      updateSketchFlicker(elapsed);
       world.update(delta);
     },
   };

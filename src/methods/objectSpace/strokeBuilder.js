@@ -258,7 +258,7 @@ const _toCamera = new THREE.Vector3();
  * Turn chains into a flat [x1,y1,z1, x2,y2,z2, ...] segment buffer.
  *
  * @param {object[]} meshChains  `{ topology, chains }` per mesh
- * @param {THREE.Vector3} cameraPosition
+ * @param {THREE.Vector3} cameraPosition  in the MESH's local space, for the bias
  * @param {object} options
  * @param {number[]} out  segment endpoints, 6 floats per segment
  */
@@ -436,11 +436,21 @@ export function buildStrokeSegments(meshChains, cameraPosition, options, out) {
         const a = (i - 1) * 3;
         const b = i * 3;
 
+        // Emitted in the mesh's OWN space, from localPoints rather than points.
+        //
+        // The stroke object is a child of the mesh, so writing local coordinates
+        // means the outline is carried by the mesh's transform and rides its
+        // rotation exactly - for free, every frame, however rarely the contour is
+        // actually re-solved. In world space a stale stroke sits still while the
+        // mesh turns out from under it, detaching and then losing segments behind
+        // the current depth buffer.
+        //
+        // Arc length above stays in WORLD units, so gap sizes are unaffected.
         for (const t of [t0, t1]) {
           _p.set(
-            points[a] + (points[b] - points[a]) * t,
-            points[a + 1] + (points[b + 1] - points[a + 1]) * t,
-            points[a + 2] + (points[b + 2] - points[a + 2]) * t,
+            localPoints[a] + (localPoints[b] - localPoints[a]) * t,
+            localPoints[a + 1] + (localPoints[b + 1] - localPoints[a + 1]) * t,
+            localPoints[a + 2] + (localPoints[b + 2] - localPoints[a + 2]) * t,
           );
 
           // Nudge toward the camera. A contour lies exactly ON the surface it

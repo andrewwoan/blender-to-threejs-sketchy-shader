@@ -1,4 +1,5 @@
 import * as THREE from "three/webgpu";
+import { QUALITY } from "../shared/quality.js";
 
 /**
  * The six mark styles method C switches between, generated at runtime.
@@ -19,10 +20,19 @@ import * as THREE from "three/webgpu";
  * an artist does when an area needs to go darker, and it gives a continuous tone
  * response out of a single greyscale channel.
  *
- * The mechanism is `globalCompositeOperation = "darken"`: each pixel keeps the
- * MINIMUM of what has been drawn there, so a later (lighter) stroke can never
- * erase an earlier (darker) one. Without it the last stroke drawn would win and
- * the rank ordering would be destroyed.
+ * The rank ordering is preserved by DRAW ORDER, not by a blend mode.
+ *
+ * The obvious implementation is `globalCompositeOperation = "darken"` - keep the
+ * minimum at every pixel, so a later light stroke cannot erase an earlier dark
+ * one. It is also the single most expensive thing this file could do: any
+ * composite mode other than `source-over` forces a read-modify-write per pixel
+ * and drops the canvas off its fast path, which on a phone is the difference
+ * between one second and ten.
+ *
+ * It is unnecessary. Draw the LIGHTEST strokes first and the darkest last, and
+ * plain `source-over` gives the identical image - because with opaque paint, the
+ * last stroke to cover a pixel wins, and the last one is by construction the
+ * darkest. Same min-blend result, none of the cost.
  *
  * Six styles packed into two RGB textures, three channels each - the same
  * channel-packing idiom as crosshatch.js, for the same reason: the shader
@@ -30,7 +40,37 @@ import * as THREE from "three/webgpu";
  * fetches is a great deal cheaper than six.
  */
 
-const SIZE = 1024;
+/**
+ * Half resolution on a phone, and it is not a nicety - it is the difference
+ * between running and being killed.
+ *
+ * Six 1024 sheets is 24MB of canvas backing store plus another 24MB of
+ * ImageData, on top of a live GPU context. iOS Safari budgets total canvas
+ * memory and discards or kills the tab when that budget is passed, which is why
+ * C and D died on mobile where A and B - three sheets, half the primitives -
+ * survived.
+ *
+ * At 512 all of that is quartered and rasterising is roughly four times cheaper.
+ * The LOOK is preserved because stroke lengths are already expressed as
+ * fractions of SIZE; only line widths and dot radii are in absolute pixels, so
+ * those are scaled by `PX`. Stroke COUNTS deliberately do not change: coverage
+ * is (count x length x width) / area, and with length and width both scaling
+ * with the sheet, that ratio is independent of resolution. Drop the counts and
+ * the darkest tone would come out lighter on mobile than on desktop.
+ *
+ * Matches the breakpoint in style.css and selectPanes().
+ */
+const SIZE = QUALITY.sheetSize;
+
+/** Scale for anything measured in absolute pixels rather than sheet fractions. */
+const PX = SIZE / 1024;
+
+/**
+ * Half the strokes on mobile, twice as wide, so the coverage - and therefore the
+ * tone - comes out the same. See the note by `sheetDensity` in quality.js.
+ */
+const COUNT = (n) => Math.max(1, Math.round(n * QUALITY.sheetDensity));
+const WIDTH = PX / QUALITY.sheetDensity;
 
 /** Index order the shader uses. Do not reorder without updating the material. */
 export const MARK_STYLES = [
@@ -64,9 +104,6 @@ function newSheet() {
   ctx.fillRect(0, 0, SIZE, SIZE);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-
-  // See the header: min-blend is what preserves stroke rank.
-  ctx.globalCompositeOperation = "darken";
   return { canvas, ctx };
 }
 
@@ -88,23 +125,41 @@ function tiled(x, y, reach, draw) {
   }
 }
 
-/** Grey level for a stroke's position in the draw order. 0 = first = darkest. */
+/**
+ * The 256 greys, built once.
+ *
+ * `strokeStyle = \`rgb(${v},${v},${v})\`` looks harmless and is not: it allocates
+ * a string and makes the canvas re-parse a CSS colour on every one of ~43,000
+ * strokes. Indexing a prebuilt table costs neither.
+ */
+const GREYS = Array.from({ length: 256 }, (_, v) => `rgb(${v},${v},${v})`);
+
+/**
+ * Grey for a stroke's position in the draw order. LAST drawn is darkest - see
+ * the header for why the order is reversed from what you might expect.
+ *
+ * Gamma < 1 spends more of the ramp on the strokes that arrive first as tone
+ * darkens, which is where the eye actually reads it; a linear ramp leaves the
+ * light end almost empty.
+ */
 function rankStyle(i, count) {
-  // Gamma < 1 spends more of the ramp on the early strokes, which is where the
-  // eye actually reads tone - a linear ramp leaves the light end almost empty.
-  const level = Math.round(255 * Math.pow(i / count, 0.75));
-  return `rgb(${level},${level},${level})`;
+  return GREYS[Math.round(255 * Math.pow(1 - i / count, 0.75))];
 }
 
 /** Straight-ish bowed strokes at one or more fixed angles. */
-function drawStrokes(ctx, random, { count, angles, length, width, wander, bow }) {
+function drawStrokes(
+  ctx,
+  random,
+  { count: rawCount, angles, length, width, wander, bow },
+) {
+  const count = COUNT(rawCount);
   for (let i = 0; i < count; i++) {
     ctx.strokeStyle = rankStyle(i, count);
 
     const base = angles[Math.floor(random() * angles.length)];
     const angle = ((base + (random() - 0.5) * wander) * Math.PI) / 180;
     const len = lerp(length[0], length[1], random()) * SIZE;
-    ctx.lineWidth = lerp(width[0], width[1], random());
+    ctx.lineWidth = Math.max(0.6, lerp(width[0], width[1], random()) * WIDTH);
 
     const dx = Math.cos(angle) * len;
     const dy = Math.sin(angle) * len;
@@ -125,10 +180,11 @@ function drawStrokes(ctx, random, { count, angles, length, width, wander, bow })
 }
 
 /** Loose multi-segment squiggles that double back on themselves. */
-function drawScribbles(ctx, random, { count, segments, step, width }) {
+function drawScribbles(ctx, random, { count: rawCount, segments, step, width }) {
+  const count = COUNT(rawCount);
   for (let i = 0; i < count; i++) {
     ctx.strokeStyle = rankStyle(i, count);
-    ctx.lineWidth = lerp(width[0], width[1], random());
+    ctx.lineWidth = Math.max(0.6, lerp(width[0], width[1], random()) * WIDTH);
 
     const n = Math.round(lerp(segments[0], segments[1], random()));
     const stride = lerp(step[0], step[1], random()) * SIZE;
@@ -159,18 +215,28 @@ function drawScribbles(ctx, random, { count, segments, step, width }) {
 }
 
 /** Dots. Tone comes from how many have appeared, not how dark each one is. */
-function drawStipples(ctx, random, { count, radius }) {
+function drawStipples(ctx, random, { count: rawCount, radius }) {
+  const count = COUNT(rawCount);
   for (let i = 0; i < count; i++) {
     ctx.fillStyle = rankStyle(i, count);
 
-    const r = lerp(radius[0], radius[1], random());
+    // A dot's coverage goes as r^2, so compensating for half the count means a
+    // radius scaled by sqrt(2) rather than by 2.
+    const r = Math.max(
+      0.5,
+      lerp(radius[0], radius[1], random()) * PX * Math.SQRT2,
+    );
     const x = random() * SIZE;
     const y = random() * SIZE;
 
+    // fillRect, not arc(). At this sheet size a stipple is between half a pixel
+    // and two pixels across, where a circle and a square are the same handful of
+    // texels - and they are about to be mipmapped anyway. Building and filling
+    // an arc path 26,000 times is the most expensive way to draw the cheapest
+    // mark in the set.
+    const d = r * 2;
     tiled(x, y, r + 2, (sx, sy) => {
-      ctx.beginPath();
-      ctx.arc(sx, sy, r, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillRect(sx - r, sy - r, d, d);
     });
   }
 }
@@ -244,18 +310,36 @@ function buildLayer(style) {
       throw new Error(`unknown mark style: ${style}`);
   }
 
-  return ctx.getImageData(0, 0, SIZE, SIZE).data;
+  const data = ctx.getImageData(0, 0, SIZE, SIZE).data;
+
+  // Release the backing store NOW rather than waiting for a collection that may
+  // not come before the next five sheets are allocated. Resizing a canvas to
+  // zero frees it immediately, and on a memory-budgeted mobile browser that is
+  // the difference between six live sheets and one.
+  canvas.width = canvas.height = 0;
+
+  return data;
 }
 
-/** Pack three greyscale layers into the R/G/B of one RGBA DataTexture. */
-function packSheet(layers) {
+/**
+ * Build three styles straight into the R/G/B of one RGBA DataTexture.
+ *
+ * Built one at a time and packed as they arrive, so only ONE layer's ImageData
+ * is ever alive. Mapping over the styles first and packing afterwards holds
+ * three 4MB copies at once for no benefit.
+ */
+function packSheet(styles) {
   const packed = new Uint8Array(SIZE * SIZE * 4);
-  for (let i = 0; i < SIZE * SIZE; i++) {
-    packed[i * 4 + 0] = layers[0][i * 4];
-    packed[i * 4 + 1] = layers[1][i * 4];
-    packed[i * 4 + 2] = layers[2][i * 4];
-    packed[i * 4 + 3] = 255;
+  const pixels = SIZE * SIZE;
+
+  for (let channel = 0; channel < 3; channel++) {
+    const layer = buildLayer(styles[channel]);
+    for (let i = 0; i < pixels; i++) {
+      packed[i * 4 + channel] = layer[i * 4];
+    }
   }
+
+  for (let i = 0; i < pixels; i++) packed[i * 4 + 3] = 255;
 
   const texture = new THREE.DataTexture(packed, SIZE, SIZE, THREE.RGBAFormat);
   texture.wrapS = THREE.RepeatWrapping;
@@ -278,8 +362,8 @@ export function getMarkSheets() {
   if (cached) return cached;
 
   cached = {
-    a: packSheet(MARK_STYLES.slice(0, 3).map(buildLayer)),
-    b: packSheet(MARK_STYLES.slice(3, 6).map(buildLayer)),
+    a: packSheet(MARK_STYLES.slice(0, 3)),
+    b: packSheet(MARK_STYLES.slice(3, 6)),
   };
   return cached;
 }
