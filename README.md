@@ -1,6 +1,6 @@
 # Hatch & Outline Lab
 
-⚠️⚠️⚠️ EVERYTHING TECHNICAL BELOW EXCEPT CREDIT LINKS ARE AI GENERATED BE CAREFUL ABOUT LEGITIMACY OF CLAIMS ⚠️⚠️⚠️⚠️
+⚠️⚠️⚠️ EVERYTHING TECHNICAL BELOW EXCEPT CREDIT LINKS ARE AI GENERATED/WRITTEN BE CAREFUL ABOUT LEGITIMACY OF CLAIMS ⚠️⚠️⚠️⚠️
 
 ![The two portfolio sites these techniques were extracted from: Katsumi Watanabe's on the left, Allen Zhang's on the right](Sketchy.webp)
 
