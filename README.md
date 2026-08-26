@@ -1,5 +1,7 @@
 # Hatch & Outline Lab
 
+⚠️⚠️⚠️ EVERYTHING TECHNICAL BELOW EXCEPT CREDIT LINKS ARE AI GENERATED BE CAREFUL ABOUT LEGITIMACY OF CLAIMS ⚠️⚠️⚠️⚠️
+
 ![The two portfolio sites these techniques were extracted from: Katsumi Watanabe's on the left, Allen Zhang's on the right](Sketchy.webp)
 
 > **A** and **B** were extracted from two demo sites using these techniques —
@@ -61,24 +63,24 @@ becomes sequential rather than simultaneous.
 
 ## The four methods
 
-| | **A — Inverted Hull** | **B — Screen-Space Line Art** | **C — Sketch Shader** | **D — Object-Space Line Art** |
-| --- | --- | --- | --- | --- |
-| **Hatching** | Sheet multiplied in through a shadow mask | Sheet read as four tone stops: white → R → G → B | Threshold map: strokes appear in rank order | Same as C, unchanged |
-| **Marks stick to** | Mesh UVs | Mesh UVs | The screen | The screen |
-| **Tone comes from** | An authored light direction | An authored light direction | The real lit result (`Shader to RGB`) | Same as C |
-| **Hatch boil** | Cycle which channel is sampled | Walk the sampling UV one golden angle per step | Offset the whole sheet per stop-motion tick | Same as C |
-| **Outline** | Backface-expanded duplicate geometry | Edge detection over a depth/normal/id pre-pass | Same as B, unchanged | Contours read from mesh topology, chained into strokes |
-| **Interior contours** | No — a hull is only ever a silhouette | Yes | Yes | Yes |
-| **Line width** | Object-space, varies with distance | Uniform in pixels | Uniform in pixels | Uniform in pixels |
-| **Gaps along the line** | — | A screen-space field that happens to cross it | Same as B | Exact — measured along the stroke's own length |
-| **Cost grows with** | Mesh count | Screen size | Screen size | **Model detail** (a CPU solve) |
-| **Steadiness** | Rock steady under camera motion | Swims slightly | Swims slightly | Rock steady |
+|                         | **A — Inverted Hull**                     | **B — Screen-Space Line Art**                    | **C — Sketch Shader**                       | **D — Object-Space Line Art**                          |
+| ----------------------- | ----------------------------------------- | ------------------------------------------------ | ------------------------------------------- | ------------------------------------------------------ |
+| **Hatching**            | Sheet multiplied in through a shadow mask | Sheet read as four tone stops: white → R → G → B | Threshold map: strokes appear in rank order | Same as C, unchanged                                   |
+| **Marks stick to**      | Mesh UVs                                  | Mesh UVs                                         | The screen                                  | The screen                                             |
+| **Tone comes from**     | An authored light direction               | An authored light direction                      | The real lit result (`Shader to RGB`)       | Same as C                                              |
+| **Hatch boil**          | Cycle which channel is sampled            | Walk the sampling UV one golden angle per step   | Offset the whole sheet per stop-motion tick | Same as C                                              |
+| **Outline**             | Backface-expanded duplicate geometry      | Edge detection over a depth/normal/id pre-pass   | Same as B, unchanged                        | Contours read from mesh topology, chained into strokes |
+| **Interior contours**   | No — a hull is only ever a silhouette     | Yes                                              | Yes                                         | Yes                                                    |
+| **Line width**          | Object-space, varies with distance        | Uniform in pixels                                | Uniform in pixels                           | Uniform in pixels                                      |
+| **Gaps along the line** | —                                         | A screen-space field that happens to cross it    | Same as B                                   | Exact — measured along the stroke's own length         |
+| **Cost grows with**     | Mesh count                                | Screen size                                      | Screen size                                 | **Model detail** (a CPU solve)                         |
+| **Steadiness**          | Rock steady under camera motion           | Swims slightly                                   | Swims slightly                              | Rock steady                                            |
 
 None of them is "the right one". A has almost no infrastructure and composites
 with anything; B inks a whole scene with no per-mesh setup and can modulate the
 line per pixel; C puts the marks on the paper rather than on the model and gets
 cast shadows as hatching for free; D is the only one that knows a contour is a
-*curve*, which is what lets it place gaps along a stroke rather than approximate
+_curve_, which is what lets it place gaps along a stroke rather than approximate
 them. Look at the torus knot across the panes: A draws only its outside, the
 other three draw where the tube passes in front of itself.
 
@@ -99,7 +101,7 @@ D runs the same idea on the CPU, since its strokes are built in JavaScript.
 
 Method D is also the one place where that clock has to be kept apart from
 another. Its contour geometry is view-dependent and must be re-solved often, or
-the outline detaches from a spinning object; its *hand* redraws a few times a
+the outline detaches from a spinning object; its _hand_ redraws a few times a
 second like everything else. Two clocks, `solve rate` and `boil`, and conflating
 them turns the lifts into noise rather than a boil.
 
@@ -109,10 +111,10 @@ Methods A and B shade a surface by its own angle to the light. That is why a fla
 floor never hatches — its normal does not change just because something is
 standing on it — and it is why cast shadows in most stylised renderers come out
 as a **flat grey patch laid over the drawing**. The shadow arrives separately, as
-a light attenuation the renderer multiplies in *after* `colorNode`, so by default
+a light attenuation the renderer multiplies in _after_ `colorNode`, so by default
 it can only dim what is already there.
 
-An illustrator does not do that. A cast shadow is *drawn*, with the same strokes
+An illustrator does not do that. A cast shadow is _drawn_, with the same strokes
 as everything else — so here it samples the **same crosshatch sheet the surfaces
 use**, boiling on the same beat.
 
@@ -123,10 +125,12 @@ work:
 // The trap: a texture() fetch in here resolves to a CONSTANT, whatever UV or
 // explicit mip level you hand it. Every knob still appears to respond, because
 // the constant scales with them — so you get a flat patch with extra steps.
-material.receivedShadowNode = Fn(([shadow]) => mix(hatchFromSheet, float(1), shadow));
+material.receivedShadowNode = Fn(([shadow]) =>
+  mix(hatchFromSheet, float(1), shadow),
+);
 ```
 
-Plain arithmetic on `uv()` / `screenUV` *does* vary per fragment in there, which
+Plain arithmetic on `uv()` / `screenUV` _does_ vary per fragment in there, which
 makes the failure genuinely hard to spot. Only the fetch is broken.
 
 The way around it is to use the hook purely to **capture** the shadow and apply
@@ -137,7 +141,7 @@ const shadowFactor = float(1).toVar();
 
 material.receivedShadowNode = Fn(([shadow]) => {
   shadowFactor.mulAssign(shadow); // mulAssign: several lights must compound
-  return float(1.0);              // bypass the built-in multiply
+  return float(1.0); // bypass the built-in multiply
 });
 
 material.outputNode = vec4(output.rgb.mul(shadowTint), output.a);
@@ -164,7 +168,7 @@ know **how deep into the shadow** a fragment sits:
   ground:
 
   ```js
-  const toLight = normalize(lightDirectionWorld);        // surface → light
+  const toLight = normalize(lightDirectionWorld); // surface → light
   const flat = vec3(toLight.x, 0, toLight.z);
   const cast = flat.div(max(length(flat), 1e-4)).negate(); // the way it is thrown
   const along = dot(positionWorld.sub(anchor), cast);
@@ -193,12 +197,13 @@ know **how deep into the shadow** a fragment sits:
   Halving the map buys penumbra far more cheaply than raising the radius.
 
   Then VSM light-bleeds as its blur grows: past a modest radius the shadow does
-  not spread, it *evaporates*, because the core stops reaching full darkness. The
+  not spread, it _evaporates_, because the core stops reaching full darkness. The
   `fade start`/`fade end` remap stretches the usable part of the field back over
   the full range, which is what turns the fade's spatial width into a control
   instead of a side effect. `Shadow spread (all panes)` drives the radius live.
+
 - **A ragged edge.** A clean boundary gives the whole thing away. A noise pushes
-  the field around *before* the curve (`edge break-up`, `edge scale`), so the edge
+  the field around _before_ the curve (`edge break-up`, `edge scale`), so the edge
   breaks up — and because the noise moves the FIELD rather than the finished
   colour, strokes near the edge thin and drop out one by one, the way a pencil
   lifts.
@@ -207,7 +212,7 @@ know **how deep into the shadow** a fragment sits:
   Weight the noise by `depth * (1 - depth)`, which peaks halfway through the
   falloff and is zero at both ends, so it only touches the transition band — apply
   it across the whole field and the shading crawls over the entire shadow. And
-  scale the boil axis *down* when feeding the stop-motion clock into the noise: at
+  scale the boil axis _down_ when feeding the stop-motion clock into the noise: at
   a full step per tick the edge is uncorrelated frame to frame and visibly
   crawls, where a fraction of a step just nudges it, like a line being redrawn.
 
@@ -218,13 +223,13 @@ texels wide, nowhere near enough to run a pencil falloff across. The blurred map
 is not there for realism — it is the input the materials read.
 
 Watch the noise scale: it is in cycles per UV unit, so it has to be read against
-the *receiver's* unwrap. Set it far finer than the shadow itself and the lumps
+the _receiver's_ unwrap. Set it far finer than the shadow itself and the lumps
 average out into a smooth edge again, which looks identical to not having it.
 
 #### It has to be opt-in
 
 `createHatchedMaterial({ drawnShadow: true })`, and only on surfaces that a cast
-shadow actually gets *drawn on* — in this scene, the ground. Turning it on for
+shadow actually gets _drawn on_ — in this scene, the ground. Turning it on for
 everything does real damage:
 
 - Bypassing the built-in multiply throws away each mesh's **own self-shadowing**
@@ -317,10 +322,10 @@ seed so everyone sees the same sheet.
 `src/textures/markSheets.js` generates six **tonal art maps** — crosshatch,
 hatch, lines, scribbles, stipples, chaotic — packed three to a texture.
 
-A tone sheet holds three *fixed* densities and the shader crossfades between
+A tone sheet holds three _fixed_ densities and the shader crossfades between
 them. A tonal art map instead encodes each stroke's **rank** in its grey level,
 so the shader just thresholds: show every stroke darker than the current tone.
-Raise the threshold and strokes *appear*, one at a time, in the gaps between
+Raise the threshold and strokes _appear_, one at a time, in the gaps between
 those already there — which is what an artist does when an area needs weight, and
 it gets a continuous tone response out of one greyscale channel.
 
@@ -413,7 +418,7 @@ compilations. As a uniform they generate byte-identical code and the node
 builder's cache serves one.
 
 **Stale strokes need a parent, not a faster clock.** Method D writes its segments
-in each mesh's *local* space and parents the stroke object to that mesh, so the
+in each mesh's _local_ space and parents the stroke object to that mesh, so the
 scene graph carries the outline through the mesh's rotation for free. In world
 space a stroke solved at 12Hz sits still while the object turns out from under
 it, and the parts that end up inside the new surface get culled by the depth
@@ -430,7 +435,7 @@ across five files.
 
 Two of those are worth knowing about:
 
-- **Pixel ratio** is the dominant lever, because cost goes as the *square* of it.
+- **Pixel ratio** is the dominant lever, because cost goes as the _square_ of it.
   A phone reporting `devicePixelRatio` 3 clamped to 2 is drawing four times the
   CSS pixel grid.
 - **Shadow radius is in texels**, so halving the map doubles what one is worth.
@@ -459,7 +464,7 @@ mask, the view-normal buffer, or the object-id buffer instead of the composite.
 Which stage comes out empty tells you where a missing line went.
 
 **Creases** (method D). Off by default, matching the Line Art modifier in the
-source blend file. A crease is a hard *fold* in the surface rather than a
+source blend file. A crease is a hard _fold_ in the surface rather than a
 silhouette, so inking every one turns a drawn cube into a wireframe box. Turning
 them on is also what fragments the cube's chains, since every corner then becomes
 a junction.
@@ -470,72 +475,21 @@ and chaotic is a uniform write with no recompile.
 
 ---
 
-## Credits
+# Credits
 
-### Where this came from
+Third-party assets and libraries used in this project, with the attribution
+their licenses require.
 
-Both techniques were built for, and are in production on, two portfolio sites:
+## Audio
 
-|                         | Site                                                                       | Method it runs                |
-| ----------------------- | -------------------------------------------------------------------------- | ----------------------------- |
-| Left in the screenshot  | [Katsumi Watanabe's Portfolio](https://katsumi-watanabe-folio.vercel.app/) | **A** — inverted hull         |
-| Right in the screenshot | [Allen Zhang's Portfolio](https://allen-zhang-folio.vercel.app/)           | **B** — screen-space line art |
-
-**C** is a port of a Blender sketch-shader node group: `Texture Coordinate >
-Window` through an aspect fix into the sampler, `Shader to RGB` for tone, a
-posterising `Bands Sharpness`, and a "Texture Flicker" group for the boil.
-
-**D** reimplements the approach of Blender's Grease Pencil **Line Art** modifier
-— classify edges from mesh topology, chain them into strokes — with one stage
-swapped so it can run in real time. Line Art raycasts every edge against the
-whole scene to decide visibility, which is why it is a bake; here the strokes are
-real geometry, so the depth buffer does it for free. The trade is that there are
-no occlusion *levels* (so no styled hidden lines) and no face intersections.
-
-### Assets in this repo
-
-The app loads none. The crosshatch sheet and the paper stock are both generated
-at runtime by `src/textures/` — see [The crosshatch sheet](#the-crosshatch-sheet).
-`src/textures/markSheets.js` adds six more. There is no third-party image, model,
-font, or audio file in the build to attribute, and nothing to license around.
-
-`public/favicon.svg` is hand-written SVG — a hatch swatch with the same
-light-to-dark density ramp the materials read out of the sheet — so it carries no
-attribution either. It is covered by this repo's MIT license along with the code.
-
-The only binary in the repo is `Sketchy.webp` above, which is a screenshot of the
-two sites and is never loaded by the demo.
-
-### Dependencies
-
-Licenses are the `license` field each package declares at the version installed
-here.
-
-- [three.js](https://threejs.org) 0.183.2 — MIT
-- [Vite](https://vite.dev) 8 — MIT
-
-The controls are three.js's own bundled `addons/inspector`, so there is no
-separate GUI dependency. `lil-gui` is still declared in `package.json` but is no
-longer imported anywhere and can be removed.
-
-### Attributions carried over from the source projects
-
-None of the assets below ship in this repo — they belong to the two sites above.
-They are reproduced here so the attribution travels with the code it was
-extracted alongside.
-
-#### Katsumi Watanabe's Portfolio — music
-
-Music by [AtlasAudio](https://pixabay.com/users/atlasaudio-54514918/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=512255)
-from [Pixabay](https://pixabay.com/music//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=512255).
-
-#### Katsumi Watanabe's Portfolio — thunder
-
-Three one-shots, played at random per lightning strike in Scene 1. All were
-trimmed to start on their transient, faded out, peak-matched to -1dBFS, and
+Music by <a href="https://pixabay.com/users/atlasaudio-54514918/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=512255">AtlasAudio</a> from <a href="https://pixabay.com/music//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=512255">Pixabay</a>
+Three thunder one-shots, played at random per lightning strike in Scene 1. All
+were trimmed to start on their transient, faded out, peak-matched to -1dBFS, and
 encoded to Ogg Vorbis and MP3 for the web.
 
-**`thunder-crack`** — near strike
+Music by [Cody Quinn](https://codyoquinnmusic.com/single/50673/star-striker)
+
+### `public/sounds/thunder-crack.ogg` / `.mp3` — near strike
 
 > "Thunder, Very Close, Rain, 01.wav" by InspectorJ (www.jshaw.co.uk)
 
@@ -546,40 +500,42 @@ encoded to Ogg Vorbis and MP3 for the web.
   rain-only lead-in) to 9.5s long, 2.5s fade-out, +1.0dB. Original is a
   12.8-second 16-bit/44.1kHz stereo WAV.
 
-**`thunder-roll`** — mid-distance strike
+### `public/sounds/thunder-roll.ogg` / `.mp3` — mid-distance strike
 
 - **Author:** WuxiaScrub
 - **Source:** [Rain + Long Thunder — OpenGameArt.org](https://opengameart.org/content/rain-long-thunder)
-- **License:** [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) — public domain, no attribution required (credited anyway)
+- **License:** [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) — public domain, no attribution required (credited here anyway)
 - **Changes:** cut from 21.0s (where the thunder begins in the 44-second
   original) to 13s long, 3s fade-out, +1.5dB.
 
-**`thunder-distant`** — far strike
+### `public/sounds/thunder-distant.ogg` / `.mp3` — far strike
 
 - **Author:** WuxiaScrub
 - **Source:** [Rain + Long Thunder — OpenGameArt.org](https://opengameart.org/content/rain-long-thunder)
-- **License:** [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) — public domain, no attribution required (credited anyway)
+- **License:** [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) — public domain, no attribution required (credited here anyway)
 - **Changes:** cut from 29.5s — partway into the same roll, so it has no sharp
   transient and reads as distant — to 9s long, 2.5s fade-out, +6.8dB.
 
-#### Allen Zhang's Portfolio — tree image
+Cued from [`src/Experience/World/Lightning.js`](src/Experience/World/Lightning.js).
 
-Tree cutout used in the scenery.
+## Libraries
 
-> Isolated Tree PNG by Vecteezy
-
-- **Asset:** [Isolated Tree PNG](https://www.vecteezy.com/png/13666709-isolated-tree-png)
-- **Source:** [Vecteezy](https://www.vecteezy.com)
-- **License:** [Vecteezy Free License](https://www.vecteezy.com/licensing-agreement) — attribution required
-
-#### Libraries used by the source projects
-
-Beyond the three above, those sites also use:
+Licenses below are the `license` field each package declares in its own
+`package.json` at the version installed here.
 
 - [howler.js](https://howlerjs.com) 2.2.4 — MIT
+- [three.js](https://threejs.org) 0.183.2 — MIT
 - [GSAP](https://gsap.com) 3.15.0 — [standard "no charge" license](https://gsap.com/standard-license)
+- [lil-gui](https://lil-gui.georgealways.com) 0.21.0 — MIT
 - [normalize-wheel](https://github.com/basilfx/normalize-wheel) 1.0.1 — BSD-3-Clause
 - [events](https://github.com/browserify/events) 3.3.0 — MIT
+
+## Models & Other Credits
+
+- [Semi-Modern Train by Yarek212](https://sketchfab.com/3d-models/semi-modern-train-f2933788134647ae9f98238e00ec97a4)
+- [Headphones by SofiaWolfie](https://sketchfab.com/3d-models/headphones-a3b8d6252b01483194870138d48f040b)
+- [Books and magazines by Naira](https://sketchfab.com/3d-models/books-and-magazines-d0b76eada5bd495abcdfb2b20e6f7ee6)
+- [Katana by SUSUSUBE](https://sketchfab.com/3d-models/katana-c0d5ac2a45a44ade856c8c965cf6ef7b)
 
 ---
 
